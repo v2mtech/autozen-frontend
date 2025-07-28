@@ -4,9 +4,7 @@ import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { FaWhatsapp } from 'react-icons/fa';
 
-// --- INÍCIO DA CORREÇÃO ---
 const WhatsappIcon = FaWhatsapp as React.ElementType;
-// --- FIM DA CORREÇÃO ---
 
 interface Agendamento {
     id: string;
@@ -52,7 +50,9 @@ export default function KanbanPage() {
         setLoading(true);
         try {
             const response = await api.get<Agendamento[]>('/agendamentos');
-            const agendamentos = response.data;
+
+            // ✅ CORREÇÃO DE ROBUSTEZ: Garante que a resposta da API é um array antes de continuar
+            const agendamentos = Array.isArray(response.data) ? response.data : [];
 
             const newColumns: Columns = {
                 'agendado': { id: 'agendado', title: 'Agendado', items: [] },
@@ -82,8 +82,8 @@ export default function KanbanPage() {
     }, [fetchAgendamentos]);
 
     const handleWhatsAppClick = (event: React.MouseEvent, telefone: string | null, clienteNome: string) => {
-        event.preventDefault(); 
-        event.stopPropagation(); 
+        event.preventDefault();
+        event.stopPropagation();
 
         if (!telefone) {
             alert('Este cliente não tem um número de telefone registrado.');
@@ -102,7 +102,7 @@ export default function KanbanPage() {
         const startColumn = columns[source.droppableId];
         const endColumn = columns[destination.droppableId];
         const item = startColumn.items.find(item => item.id === draggableId);
-        
+
         if (!item) return;
 
         const columnIdToStatus: { [key: string]: string } = {
@@ -164,7 +164,7 @@ export default function KanbanPage() {
                                                             {...provided.dragHandleProps}
                                                             className={`p-4 rounded-md shadow-sm border-l-4 ${snapshot.isDragging ? 'bg-gray-200' : 'bg-white'} border-primaria-padrao hover:scale-105 transition-transform`}
                                                         >
-                                                            <button 
+                                                            <button
                                                                 onClick={(e) => handleWhatsAppClick(e, item.extendedProps.cliente_telefone, item.extendedProps.cliente)}
                                                                 className="absolute top-2 right-2 text-green-500 hover:text-green-400 z-10 p-1 rounded-full hover:bg-gray-100"
                                                                 title="Contactar via WhatsApp"

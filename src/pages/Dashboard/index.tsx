@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend, PointElement, LineElement, DoughnutController } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend, PointElement, LineElement, DoughnutController, Filler } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import * as XLSX from 'xlsx';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend, PointElement, LineElement, DoughnutController);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend, PointElement, LineElement, DoughnutController, Filler);
 
 // Interfaces
 interface AnalyticsData {
@@ -78,25 +78,27 @@ export default function DashboardPage() {
 
     useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
 
+    // ✅ INÍCIO DA CORREÇÃO DE ROBUSTEZ
     const pagamentosData = {
-        labels: analyticsData.faturamentoPorFormaPagamento?.map(p => p.nome) || [],
-        datasets: [{ data: analyticsData.faturamentoPorFormaPagamento?.map(p => p.total), backgroundColor: ['#a30101ff', '#eb3d12ff', '#fc9f54ff', '#f1c971ff', '#142738'] }],
+        labels: Array.isArray(analyticsData.faturamentoPorFormaPagamento) ? analyticsData.faturamentoPorFormaPagamento.map(p => p.nome) : [],
+        datasets: [{ data: Array.isArray(analyticsData.faturamentoPorFormaPagamento) ? analyticsData.faturamentoPorFormaPagamento.map(p => p.total) : [], backgroundColor: ['#a30101ff', '#eb3d12ff', '#fc9f54ff', '#f1c971ff', '#142738'] }],
     };
-    
+
     const orcamentosData = {
-        labels: analyticsData.orcamentosAprovados?.map(o => new Date(o.dia).toLocaleDateString('pt-BR', {timeZone: 'UTC'})) || [],
-        datasets: [{ label: 'Orçamentos Aprovados', data: analyticsData.orcamentosAprovados?.map(o => o.quantidade), borderColor: '#046614ff', backgroundColor: '#0d860969', fill: true }],
+        labels: Array.isArray(analyticsData.orcamentosAprovados) ? analyticsData.orcamentosAprovados.map(o => new Date(o.dia).toLocaleDateString('pt-BR', { timeZone: 'UTC' })) : [],
+        datasets: [{ label: 'Orçamentos Aprovados', data: Array.isArray(analyticsData.orcamentosAprovados) ? analyticsData.orcamentosAprovados.map(o => o.quantidade) : [], borderColor: '#046614ff', backgroundColor: '#0d860969', fill: true }],
     };
-    
+
     const funcionariosData = {
-        labels: analyticsData.servicosPorFuncionario?.map(f => f.nome) || [],
-        datasets: [{ label: 'Serviços Realizados', data: analyticsData.servicosPorFuncionario?.map(f => f.quantidade), backgroundColor: '#b60c0cff' }],
+        labels: Array.isArray(analyticsData.servicosPorFuncionario) ? analyticsData.servicosPorFuncionario.map(f => f.nome) : [],
+        datasets: [{ label: 'Serviços Realizados', data: Array.isArray(analyticsData.servicosPorFuncionario) ? analyticsData.servicosPorFuncionario.map(f => f.quantidade) : [], backgroundColor: '#b60c0cff' }],
     };
-    
+
     const topServicosData = {
-        labels: analyticsData.topServicos?.map(s => s.nome) || [],
-        datasets: [{ data: analyticsData.topServicos?.map(s => s.quantidade), backgroundColor: ['#a30101ff', '#eb3d12ff', '#fc9f54ff', '#f1c971ff', '#142738'] }],
+        labels: Array.isArray(analyticsData.topServicos) ? analyticsData.topServicos.map(s => s.nome) : [],
+        datasets: [{ data: Array.isArray(analyticsData.topServicos) ? analyticsData.topServicos.map(s => s.quantidade) : [], backgroundColor: ['#a30101ff', '#eb3d12ff', '#fc9f54ff', '#f1c971ff', '#142738'] }],
     };
+    // ✅ FIM DA CORREÇÃO DE ROBUSTEZ
 
     return (
         <div>
@@ -128,7 +130,7 @@ export default function DashboardPage() {
                     <Line data={orcamentosData} />
                 </div>
                 <div className="bg-fundo-secundario p-6 rounded-lg shadow-lg relative">
-                     <ChartMenu onExportXLSX={() => exportToXLSX(analyticsData.servicosPorFuncionario || [], 'servicos_por_funcionario')} />
+                    <ChartMenu onExportXLSX={() => exportToXLSX(analyticsData.servicosPorFuncionario || [], 'servicos_por_funcionario')} />
                     <h2 className="text-xl font-bold text-white mb-4">Serviços por Funcionário</h2>
                     <Bar data={funcionariosData} />
                 </div>
