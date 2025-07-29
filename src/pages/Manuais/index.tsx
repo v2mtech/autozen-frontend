@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaBookOpen, FaVideo } from 'react-icons/fa';
+import api from '../../services/api';
 
 const BookIcon = FaBookOpen as React.ElementType;
 const VideoIcon = FaVideo as React.ElementType;
@@ -134,13 +135,12 @@ const manualData = [
     }
 ];
 
-// --- INÍCIO DA CORREÇÃO ---
 const VideoPlayer = ({ url }: { url: string }) => {
     const getEmbedUrl = (videoUrl: string) => {
         try {
             const urlObj = new URL(videoUrl);
             let videoId = urlObj.searchParams.get('v');
-            if (urlObj.hostname === 'youtu.be') { // youtu.be
+            if (urlObj.hostname === 'youtu.be') {
                 videoId = urlObj.pathname.substring(1);
             }
             return videoId ? `https://www.youtube.com/embed/${videoId}` : '';
@@ -152,11 +152,10 @@ const VideoPlayer = ({ url }: { url: string }) => {
     const embedUrl = getEmbedUrl(url);
 
     if (!embedUrl) {
-        return <p className="text-sm text-yellow-400">URL do YouTube inválida ou não reconhecida.</p>;
+        return <p className="text-sm text-yellow-500">URL do YouTube inválida ou não reconhecida.</p>;
     }
 
     return (
-        // Este container div agora cria a proporção correta (16:9)
         <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
             <iframe
                 src={embedUrl}
@@ -164,26 +163,31 @@ const VideoPlayer = ({ url }: { url: string }) => {
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
-                // Estas classes fazem o iframe preencher o container
                 className="absolute top-0 left-0 w-full h-full rounded-lg"
             ></iframe>
         </div>
     );
 };
-// --- FIM DA CORREÇÃO ---
-
 
 export default function ManuaisPage() {
     const [activeTab, setActiveTab] = useState(manualData[0].slug);
     const [videoUrls, setVideoUrls] = useState<{ [key: string]: string }>({});
-    const [currentUrl, setCurrentUrl] = useState('');
+    const [loading, setLoading] = useState(true);
 
-    const handleSetVideo = () => {
-        setVideoUrls(prev => ({
-            ...prev,
-            [activeTab]: currentUrl
-        }));
-    };
+    // ✅ EFEITO PARA BUSCAR OS VÍDEOS DO BANCO DE DADOS
+    useEffect(() => {
+        const fetchVideos = async () => {
+            try {
+                const response = await api.get('/manuais/videos');
+                setVideoUrls(response.data);
+            } catch (error) {
+                console.error("Erro ao buscar vídeos do manual:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchVideos();
+    }, []);
 
     const activeContent = manualData.find(item => item.slug === activeTab);
 
@@ -191,7 +195,7 @@ export default function ManuaisPage() {
         <div>
             <div className="flex items-center gap-4 mb-6">
                 <BookIcon size={40} className="text-primaria-padrao" />
-                <h1 className="text-4xl font-bold">Manual de Funcionamento do Sistema</h1>
+                <h1 className="text-4xl font-bold text-texto-principal">Manual de Funcionamento do Sistema</h1>
             </div>
             <div className="flex flex-col md:flex-row gap-8">
                 {/* Navegação em Abas */}
@@ -215,34 +219,20 @@ export default function ManuaisPage() {
                 {/* Conteúdo da Aba */}
                 <div className="w-full md:w-3/4">
                     {activeContent && (
-                        <div className="bg-fundo-secundario p-8 rounded-lg shadow-lg">
-                            <h2 className="text-3xl font-bold mb-4 text-white">{activeContent.title}</h2>
+                        <div className="bg-fundo-secundario p-8 rounded-lg shadow-sm border border-borda">
+                            <h2 className="text-3xl font-bold mb-4 text-texto-principal">{activeContent.title}</h2>
                             <div className="prose prose-invert max-w-none text-texto-secundario" dangerouslySetInnerHTML={{ __html: activeContent.content }} />
 
                             <hr className="border-borda my-8" />
 
                             <div className="space-y-4">
-                                <h3 className="text-2xl font-bold text-white flex items-center gap-3"><VideoIcon /> Vídeo Explicativo</h3>
-                                {videoUrls[activeTab] ? (
-                                    <VideoPlayer url={videoUrls[activeTab]} />
-                                ) : (
-                                    <p className="text-texto-secundario">Nenhum vídeo adicionado para esta secção.</p>
-                                )}
-                                <div className="flex items-end gap-2">
-                                    <div className="flex-grow">
-                                        <label className="text-sm font-semibold text-texto-secundario block mb-2">Adicionar/Alterar URL do Vídeo do YouTube:</label>
-                                        <input
-                                            type="text"
-                                            value={currentUrl}
-                                            onChange={(e) => setCurrentUrl(e.target.value)}
-                                            placeholder="Cole o link do YouTube aqui..."
-                                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primaria-padrao focus:outline-none"
-                                        />
-                                    </div>
-                                    <button onClick={handleSetVideo} className="bg-primaria-padrao text-white font-bold py-2 px-4 rounded-lg hover:bg-primaria-escuro transition-colors">
-                                        Carregar Vídeo
-                                    </button>
-                                </div>
+                                <h3 className="text-2xl font-bold text-texto-principal flex items-center gap-3"><VideoIcon /> Vídeo Explicativo</h3>
+                                {loading ? <p className="text-texto-secundario">A carregar vídeo...</p> :
+                                    videoUrls[activeTab] ? (
+                                        <VideoPlayer url={videoUrls[activeTab]} />
+                                    ) : (
+                                        <p className="text-texto-secundario p-4 bg-fundo-principal rounded-md">Nenhum vídeo de ajuda disponível para esta secção.</p>
+                                    )}
                             </div>
                         </div>
                     )}

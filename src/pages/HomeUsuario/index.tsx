@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import { Button } from '../../components/Button';
 
 interface Empresa {
   id: number;
@@ -13,7 +14,7 @@ interface Empresa {
 export default function HomeUsuarioPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null); // Estado para erros
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchEmpresas() {
@@ -21,12 +22,11 @@ export default function HomeUsuarioPage() {
       setError(null);
       try {
         const response = await api.get<Empresa[]>('/empresas');
-        // ✅ CORREÇÃO DE ROBUSTEZ: Garante que a resposta da API é um array
         if (Array.isArray(response.data)) {
           setEmpresas(response.data);
         } else {
-          console.warn("A resposta da API para '/empresas' não era um array. A definir como vazio.", response.data);
-          setEmpresas([]); // Define um array vazio para evitar o crash
+          console.warn("A resposta da API para '/empresas' não era um array.", response.data);
+          setEmpresas([]);
         }
       } catch (err) {
         console.error("Erro ao buscar empresas:", err);
@@ -38,11 +38,11 @@ export default function HomeUsuarioPage() {
     fetchEmpresas();
   }, []);
 
-  if (loading) return <p className="text-center text-gray-400 p-10">A carregar estabelecimentos...</p>;
+  if (loading) return <p className="text-center text-texto-secundario p-10">A carregar estabelecimentos...</p>;
 
   if (error) {
     return (
-      <div className="bg-red-500/10 text-red-300 p-8 rounded-lg text-center">
+      <div className="bg-red-100 text-erro p-8 rounded-lg text-center">
         <h2 className="text-2xl font-bold mb-2">Ocorreu um Erro</h2>
         <p>{error}</p>
       </div>
@@ -51,17 +51,17 @@ export default function HomeUsuarioPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6 text-white">Encontre um Estabelecimento</h1>
-      <p className="text-gray-400 mb-8">Selecione uma loja para ver os serviços e agendar.</p>
+      <h1 className="text-3xl font-bold mb-2 text-texto-principal">Encontre um Estabelecimento</h1>
+      <p className="text-texto-secundario mb-8">Selecione uma loja para ver os serviços disponíveis e agendar.</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {empresas.map(empresa => (
+        {empresas.length > 0 ? empresas.map(empresa => (
           <Link
             to={`/empresas/${empresa.id}`}
             key={empresa.id}
-            className="block bg-fundo-secundario rounded-lg p-6 hover:bg-gray-700 hover:scale-105 transform transition-all shadow-lg"
+            className="block bg-fundo-secundario rounded-lg overflow-hidden border border-borda hover:border-primaria-padrao hover:shadow-lg transform transition-all duration-300"
           >
-            <div className="h-32 bg-gray-700 rounded-md mb-4 flex items-center justify-center overflow-hidden">
+            <div className="h-40 bg-gray-200 flex items-center justify-center overflow-hidden">
               {empresa.logo_url ? (
                 <img
                   src={`http://localhost:3333${empresa.logo_url}`}
@@ -69,13 +69,17 @@ export default function HomeUsuarioPage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <span className="text-gray-500">Sem Logo</span>
+                <span className="text-gray-400">Sem Logo</span>
               )}
             </div>
-            <h2 className="text-xl font-bold text-white">{empresa.nome_fantasia}</h2>
-            <p className="text-gray-400 text-sm">{empresa.endereco_cidade}, {empresa.endereco_estado}</p>
+            <div className="p-4">
+              <h2 className="text-lg font-bold text-texto-principal truncate">{empresa.nome_fantasia}</h2>
+              <p className="text-texto-secundario text-sm">{empresa.endereco_cidade}, {empresa.endereco_estado}</p>
+            </div>
           </Link>
-        ))}
+        )) : (
+          <p className="text-texto-secundario col-span-full text-center p-10">Nenhuma loja encontrada.</p>
+        )}
       </div>
     </div>
   );

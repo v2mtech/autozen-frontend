@@ -82,26 +82,37 @@ export default function ContasPagarPage() {
         }
     };
 
-    if (loading) return <p>A carregar...</p>;
+    if (loading) return <p className="text-center text-texto-secundario">A carregar...</p>;
 
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-4xl font-bold">Contas a Pagar</h1>
+                <h1 className="text-4xl font-bold text-texto-principal">Contas a Pagar</h1>
                 <Button onClick={() => handleOpenModal()} className="w-auto">Adicionar Despesa</Button>
             </div>
 
-            <div className="bg-fundo-secundario rounded-lg shadow-lg">
+            <div className="bg-fundo-secundario rounded-lg shadow-sm overflow-hidden border border-borda">
                 <table className="w-full text-left">
-                    <thead className="bg-gray-700"><tr><th className="p-4">Descrição</th><th className="p-4">Fornecedor</th><th className="p-4">Vencimento</th><th className="p-4">Valor</th><th className="p-4">Status</th></tr></thead>
-                    <tbody>
+                    <thead className="border-b border-borda bg-fundo-principal">
+                        <tr>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Descrição</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Fornecedor</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Vencimento</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Valor</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-borda">
                         {contas.map(conta => (
-                            <tr key={conta.id} onClick={() => handleOpenModal(conta)} className="border-b border-gray-700 cursor-pointer hover:bg-gray-800">
-                                <td className="p-4 font-semibold">{conta.descricao}</td>
-                                <td className="p-4">{conta.fornecedor_nome || 'Diversos'}</td>
-                                <td className="p-4">{new Date(conta.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
-                                <td className="p-4 font-mono">{Number(conta.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                <td className="p-4"><span className={`px-2 py-1 rounded-full text-xs font-semibold ${conta.status === 'Pago' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{conta.status}</span></td>
+                            <tr key={conta.id} onClick={() => handleOpenModal(conta)} className="cursor-pointer hover:bg-fundo-principal">
+                                <td className="p-4 font-medium text-texto-principal">{conta.descricao}</td>
+                                <td className="p-4 text-texto-secundario">{conta.fornecedor_nome || 'Diversos'}</td>
+                                <td className="p-4 text-texto-secundario">{new Date(conta.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
+                                <td className="p-4 text-texto-principal font-mono">{Number(conta.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                <td className="p-4">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${conta.status === 'Pago' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        }`}>{conta.status}</span>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -110,28 +121,30 @@ export default function ContasPagarPage() {
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditing ? 'Editar Despesa' : 'Nova Despesa'}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input label="Descrição" name="descricao" value={currentConta.descricao || ''} onChange={handleChange} required className="md:col-span-2" />
+                    <div className="md:col-span-2">
+                        <Input label="Descrição" name="descricao" value={currentConta.descricao || ''} onChange={handleChange} required />
+                    </div>
                     <Input label="Categoria" name="categoria" value={currentConta.categoria || ''} onChange={handleChange} placeholder="Ex: Aluguel, Fornecedores" />
                     <Input label="Valor (R$)" name="valor" type="number" step="0.01" value={currentConta.valor || ''} onChange={handleChange} required />
                     <Input label="Data de Vencimento" name="data_vencimento" type="date" value={currentConta.data_vencimento || ''} onChange={handleChange} required />
                     <div>
                         <label className="text-sm font-semibold text-texto-secundario block mb-2">Status</label>
-                        <select name="status" value={currentConta.status || 'Pendente'} onChange={handleChange} className="w-full p-2 border rounded-lg bg-white">
+                        <select name="status" value={currentConta.status || 'Pendente'} onChange={handleChange} className="w-full px-4 py-3 bg-white border border-borda rounded-lg">
                             <option>Pendente</option><option>Pago</option>
                         </select>
                     </div>
                     {currentConta.status === 'Pago' && (
                         <Input label="Data de Pagamento" name="data_pagamento" type="date" value={currentConta.data_pagamento || ''} onChange={handleChange} />
                     )}
-                    <div>
+                    <div className="md:col-span-2">
                         <label className="text-sm font-semibold text-texto-secundario block mb-2">Fornecedor (Opcional)</label>
-                        <select name="fornecedor_id" value={currentConta.fornecedor_id || ''} onChange={handleChange} className="w-full p-2 border rounded-lg bg-white">
+                        <select name="fornecedor_id" value={currentConta.fornecedor_id || ''} onChange={handleChange} className="w-full px-4 py-3 bg-white border border-borda rounded-lg">
                             <option value="">Nenhum / Diversos</option>
                             {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia}</option>)}
                         </select>
                     </div>
                 </div>
-                <div className="flex justify-end gap-4 pt-4 mt-4 border-t"><Button onClick={() => setIsModalOpen(false)} variant="secondary">Cancelar</Button><Button onClick={handleSave}>Guardar</Button></div>
+                <div className="flex justify-end gap-4 pt-4 mt-4 border-t border-borda"><Button onClick={() => setIsModalOpen(false)} variant="secondary">Cancelar</Button><Button onClick={handleSave}>Guardar</Button></div>
             </Modal>
         </div>
     );

@@ -117,13 +117,12 @@ export default function EditarEmpresaPage() {
   return (
     <div>
       <h1 className="text-4xl font-bold mb-6 text-texto-principal">Editar Perfil da Empresa</h1>
-      <form onSubmit={handleSubmit} className="space-y-8 bg-fundo-secundario p-8 rounded-lg shadow-md border border-borda">
-        {/* --- INÍCIO DA CORREÇÃO --- */}
-        <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-lg flex items-center gap-4">
-          <p className="text-sm font-semibold text-gray-900">ID da sua Loja para login de funcionários:</p>
-          <p className="text-lg font-bold font-mono bg-fundo-principal px-3 py-1 rounded">{formData.id}</p>
+      <form onSubmit={handleSubmit} className="space-y-8 bg-fundo-secundario p-8 rounded-lg shadow-sm border border-borda">
+
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-center gap-4">
+          <p className="text-sm font-semibold text-blue-800">ID da sua Loja para login de funcionários:</p>
+          <p className="text-lg font-bold font-mono bg-blue-100 text-blue-900 px-3 py-1 rounded">{formData.id}</p>
         </div>
-        {/* --- FIM DA CORREÇÃO --- */}
 
         <div className="flex flex-col sm:flex-row items-center gap-6">
           {preview ? (
@@ -141,23 +140,21 @@ export default function EditarEmpresaPage() {
           <Input label="Nome Fantasia" name="nome_fantasia" value={formData.nome_fantasia || ''} onChange={handleChange} required />
           <Input label="Nome da Empresa (Razão Social)" name="nome_empresa" value={formData.nome_empresa || ''} onChange={handleChange} required />
           <Input label="CNPJ" name="cnpj" value={formData.cnpj || ''} onChange={handleChange} required />
-
           <Input label="Inscrição Estadual" name="inscricao_estadual" value={formData.inscricao_estadual || ''} onChange={handleChange} />
           <Input label="Inscrição Municipal" name="inscricao_municipal" value={formData.inscricao_municipal || ''} onChange={handleChange} />
           <div>
-            <label className="text-sm font-semibold text-gray-400 block mb-2">Regime Tributário</label>
+            <label className="text-sm font-semibold text-texto-secundario block mb-2">Regime Tributário</label>
             <select
               name="regime_tributario"
               value={formData.regime_tributario || ''}
               onChange={handleChange}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primaria-padrao focus:outline-none transition duration-200"
+              className="w-full px-4 py-3 bg-white border border-borda rounded-lg focus:ring-2 focus:ring-primaria-escuro focus:outline-none transition duration-200"
             >
               {regimesTributarios.map(regime => (
                 <option key={regime.valor} value={regime.valor}>{regime.nome}</option>
               ))}
             </select>
           </div>
-
           <Input label="E-mail de Acesso" type="email" name="email" value={formData.email || ''} onChange={handleChange} required />
           <Input label="Telefone Comercial" name="telefone" value={formData.telefone || ''} onChange={handleChange} />
           <Input label="Nome do Responsável" name="nome_responsavel" value={formData.nome_responsavel || ''} onChange={handleChange} />
@@ -171,7 +168,7 @@ export default function EditarEmpresaPage() {
         </div>
 
         {error && <p className="text-erro text-center">{error}</p>}
-        {success && <p className="text-green-500 text-center">{success}</p>}
+        {success && <p className="text-green-600 text-center">{success}</p>}
 
         <div className="pt-4">
           <Button type="submit" disabled={loading} variant="primary">

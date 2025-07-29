@@ -36,31 +36,31 @@ export default function PosicaoEstoquePage() {
         XLSX.writeFile(workbook, "posicao_de_estoque.xlsx");
     };
 
-    if (loading) return <p>A carregar...</p>;
+    if (loading) return <p className="text-center text-texto-secundario">A carregar...</p>;
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-4xl font-bold">Relatório de Posição do Estoque</h1>
-                <Button onClick={handleExportar} className="w-auto">Exportar para Planilha</Button>
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                <h1 className="text-4xl font-bold text-texto-principal">Relatório de Posição do Estoque</h1>
+                <Button onClick={handleExportar} className="w-full md:w-auto">Exportar para Planilha</Button>
             </div>
-            <div className="bg-fundo-secundario rounded-lg shadow-lg">
+            <div className="bg-fundo-secundario rounded-lg shadow-sm overflow-hidden border border-borda">
                 <table className="w-full text-left">
-                    <thead className="bg-gray-700">
+                    <thead className="border-b border-borda bg-fundo-principal">
                         <tr>
-                            <th className="p-4">Cód. Produto</th>
-                            <th className="p-4">Grupo</th>
-                            <th className="p-4">Descrição do Produto</th>
-                            <th className="p-4">Qtd. em Estoque</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Cód. Produto</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Grupo</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Descrição do Produto</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Qtd. em Estoque</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-borda">
                         {posicao.map((item, index) => (
-                            <tr key={index} className="border-b border-gray-700">
-                                <td className="p-4">{item.codigo_interno || '-'}</td>
-                                <td className="p-4">{item.grupo_nome || 'Sem Grupo'}</td>
-                                <td className="p-4 font-semibold">{item.produto_nome}</td>
-                                <td className="p-4 font-bold">{item.quantidade_estoque}</td>
+                            <tr key={index} className="hover:bg-fundo-principal">
+                                <td className="p-4 text-texto-secundario">{item.codigo_interno || '-'}</td>
+                                <td className="p-4 text-texto-secundario">{item.grupo_nome || 'Sem Grupo'}</td>
+                                <td className="p-4 font-medium text-texto-principal">{item.produto_nome}</td>
+                                <td className="p-4 font-bold text-texto-principal">{item.quantidade_estoque}</td>
                             </tr>
                         ))}
                     </tbody>

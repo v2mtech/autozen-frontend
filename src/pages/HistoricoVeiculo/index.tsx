@@ -3,14 +3,13 @@ import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Link } from 'react-router-dom';
-import { FaBrain } from 'react-icons/fa'; // Importe o ícone
+import { FaBrain } from 'react-icons/fa';
 
 const IconBrain = FaBrain as React.ElementType;
 
-// Interfaces
 interface HistoricoData {
     cliente: {
-        id: number; // Adicionado o ID do cliente
+        id: number;
         nome: string;
         email: string;
         telefone: string;
@@ -28,8 +27,6 @@ export default function HistoricoVeiculoPage() {
     const [historico, setHistorico] = useState<HistoricoData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-
-    // --- NOVOS ESTADOS PARA A SUGESTÃO DA IA ---
     const [sugestaoIA, setSugestaoIA] = useState('');
     const [loadingIA, setLoadingIA] = useState(false);
 
@@ -42,7 +39,7 @@ export default function HistoricoVeiculoPage() {
         setLoading(true);
         setError('');
         setHistorico(null);
-        setSugestaoIA(''); // Limpa a sugestão anterior
+        setSugestaoIA('');
         try {
             const response = await api.get(`/veiculos/historico/${placa}`);
             setHistorico(response.data);
@@ -53,10 +50,8 @@ export default function HistoricoVeiculoPage() {
         }
     };
 
-    // --- NOVA FUNÇÃO PARA GERAR SUGESTÃO ---
     const handleGerarSugestao = async () => {
         if (!historico?.cliente.id) return;
-
         setLoadingIA(true);
         setSugestaoIA('');
         try {
@@ -73,8 +68,8 @@ export default function HistoricoVeiculoPage() {
 
     return (
         <div>
-            <h1 className="text-4xl font-bold mb-6">Histórico Completo por Placa</h1>
-            <div className="bg-fundo-secundario rounded-lg shadow-lg p-8 mb-8">
+            <h1 className="text-4xl font-bold text-texto-principal mb-6">Histórico Completo por Placa</h1>
+            <div className="bg-fundo-secundario rounded-lg shadow-sm p-6 mb-8 border border-borda">
                 <form onSubmit={handleSearch} className="flex items-end gap-4">
                     <div className="flex-1">
                         <Input
@@ -93,15 +88,17 @@ export default function HistoricoVeiculoPage() {
 
             {historico && (
                 <div className="space-y-8 animate-fade-in-up">
-                    <div className="bg-fundo-secundario p-6 rounded-lg">
+                    <div className="bg-fundo-secundario p-6 rounded-lg shadow-sm border border-borda">
                         <div className="flex justify-between items-start">
                             <div>
-                                <h2 className="text-2xl font-bold mb-4">{historico.cliente.nome}</h2>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                    {/* ... dados do cliente ... */}
+                                <h2 className="text-2xl font-bold mb-4 text-texto-principal">{historico.cliente.nome}</h2>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-4 text-sm">
+                                    <div><p className="font-semibold text-texto-secundario">Veículo</p><p className="text-texto-principal">{`${historico.cliente.veiculo_marca || ''} ${historico.cliente.veiculo_modelo || ''} ${historico.cliente.veiculo_ano || ''}`.trim() || 'Não informado'}</p></div>
+                                    <div><p className="font-semibold text-texto-secundario">Placa</p><p className="text-texto-principal">{historico.cliente.veiculo_placa || 'Não informado'}</p></div>
+                                    <div><p className="font-semibold text-texto-secundario">Email</p><p className="text-texto-principal">{historico.cliente.email || 'Não informado'}</p></div>
+                                    <div><p className="font-semibold text-texto-secundario">Telefone</p><p className="text-texto-principal">{historico.cliente.telefone || 'Não informado'}</p></div>
                                 </div>
                             </div>
-                            {/* --- BOTÃO DE SUGESTÃO DA IA --- */}
                             <Button onClick={handleGerarSugestao} disabled={loadingIA} className="w-auto flex items-center gap-2">
                                 <IconBrain />
                                 {loadingIA ? 'A analisar...' : 'Gerar Sugestão com IA'}
@@ -109,52 +106,39 @@ export default function HistoricoVeiculoPage() {
                         </div>
                     </div>
 
-                    {/* --- PAINEL PARA EXIBIR A SUGESTÃO --- */}
                     {(loadingIA || sugestaoIA) && (
-                        <div className="bg-blue-900/20 border border-blue-500/30 text-gray-900 p-6 rounded-lg shadow-lg">
-                            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><IconBrain /> Sugestão da IA</h3>
+                        <div className="bg-blue-50 border border-blue-200 text-blue-900 p-6 rounded-lg shadow-sm">
+                            <h3 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2"><IconBrain /> Sugestão da IA</h3>
                             {loadingIA ? (
                                 <p>A IA está a analisar o histórico deste cliente para criar uma oferta personalizada...</p>
                             ) : (
-                                <p className="prose prose-invert">{sugestaoIA}</p>
+                                <p className="prose">{sugestaoIA}</p>
                             )}
                         </div>
                     )}
 
-                    {/* ... (Tabela de Ordens de Serviço e Orçamentos) ... */}
                     <div>
-                        <h3 className="text-xl font-semibold mb-4">Ordens de Serviço Realizadas</h3>
-                        <div className="bg-fundo-secundario rounded-lg">
+                        <h3 className="text-xl font-semibold mb-4 text-texto-principal">Ordens de Serviço Realizadas</h3>
+                        <div className="bg-fundo-secundario rounded-lg shadow-sm overflow-hidden border border-borda">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-700"><tr><th className="p-3">OS #</th><th className="p-3">Data</th><th className="p-3">Itens</th><th className="p-3">Status</th></tr></thead>
-                                <tbody>
+                                <thead className="bg-fundo-principal border-b border-borda"><tr><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">OS #</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Data</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Itens</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Status</th></tr></thead>
+                                <tbody className="divide-y divide-borda">
                                     {historico.ordensServico.map(os => (
-                                        <tr key={os.id} className="border-b border-borda">
-                                            <td className="p-3"><Link to={`/ordem-de-servico/${os.id}`} className="text-primaria-padrao hover:underline">#{String(os.id).padStart(6, '0')}</Link></td>
-                                            <td className="p-3">{new Date(os.data_hora_inicio).toLocaleDateString('pt-BR')}</td>
-                                            <td className="p-3 text-xs">{[os.servicos, os.produtos].filter(Boolean).join(', ')}</td>
-                                            <td className="p-3 capitalize">{os.status}</td>
-                                        </tr>
+                                        <tr key={os.id}><td className="p-3 text-primaria-padrao font-medium"><Link to={`/ordem-de-servico/${os.id}`} className="hover:underline">#{String(os.id).padStart(6, '0')}</Link></td><td className="p-3 text-texto-secundario">{new Date(os.data_hora_inicio).toLocaleDateString('pt-BR')}</td><td className="p-3 text-texto-secundario text-xs">{[os.servicos, os.produtos].filter(Boolean).join(', ')}</td><td className="p-3 text-texto-principal capitalize">{os.status}</td></tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    {/* Tabela de Orçamentos */}
                     <div>
-                        <h3 className="text-xl font-semibold mb-4">Orçamentos Realizados</h3>
-                        <div className="bg-fundo-secundario rounded-lg">
+                        <h3 className="text-xl font-semibold mb-4 text-texto-principal">Orçamentos Realizados</h3>
+                        <div className="bg-fundo-secundario rounded-lg shadow-sm overflow-hidden border border-borda">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-700"><tr><th className="p-3">Orçamento #</th><th className="p-3">Data</th><th className="p-3">Valor Total</th><th className="p-3">Status</th></tr></thead>
-                                <tbody>
+                                <thead className="bg-fundo-principal border-b border-borda"><tr><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Orçamento #</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Data</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Valor Total</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Status</th></tr></thead>
+                                <tbody className="divide-y divide-borda">
                                     {historico.orcamentos.map(orc => (
-                                        <tr key={orc.id} className="border-b border-borda">
-                                            <td className="p-3"><Link to={`/orcamento/${orc.id}`} className="text-primaria-padrao hover:underline">#{orc.id}</Link></td>
-                                            <td className="p-3">{new Date(orc.data_orcamento).toLocaleDateString('pt-BR')}</td>
-                                            <td className="p-3 font-mono">{Number(orc.valor_total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                            <td className="p-3 capitalize">{orc.status}</td>
-                                        </tr>
+                                        <tr key={orc.id}><td className="p-3 text-primaria-padrao font-medium"><Link to={`/orcamento/${orc.id}`} className="hover:underline">#{orc.id}</Link></td><td className="p-3 text-texto-secundario">{new Date(orc.data_orcamento).toLocaleDateString('pt-BR')}</td><td className="p-3 text-texto-principal font-mono">{Number(orc.valor_total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td className="p-3 text-texto-principal capitalize">{orc.status}</td></tr>
                                     ))}
                                 </tbody>
                             </table>

@@ -123,85 +123,97 @@ export default function OrcamentoDetalhePage() {
 
     return (
         <div>
-            <h1 className="text-3xl font-bold mb-6">Detalhes do Orçamento #{id}</h1>
+            <h1 className="text-3xl font-bold mb-6 text-texto-principal">Detalhes do Orçamento #{id}</h1>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-fundo-secundario p-6 rounded-lg">
-                        <h2 className="text-xl font-semibold mb-2">Solicitação do Cliente</h2>
+                    {/* Card de Solicitação do Cliente */}
+                    <div className="bg-fundo-secundario p-6 rounded-lg border border-borda">
+                        <h2 className="text-xl font-semibold mb-2 text-texto-principal">Solicitação do Cliente</h2>
                         <p className="text-texto-secundario">{orcamento.descricao}</p>
-                        <div className="flex gap-4 mt-4 overflow-x-auto">
-                            {orcamento.imagens?.map(img => (
-                                <a key={img.url_imagem} href={`http://localhost:3333${img.url_imagem}`} target="_blank" rel="noreferrer">
-                                    <img src={`http://localhost:3333${img.url_imagem}`} alt="Anexo do cliente" className="w-24 h-24 object-cover rounded-md" />
-                                </a>
-                            ))}
-                        </div>
+                        {orcamento.imagens && orcamento.imagens.length > 0 && (
+                            <div className="flex gap-4 mt-4 overflow-x-auto">
+                                {orcamento.imagens.map(img => (
+                                    <a key={img.url_imagem} href={`http://localhost:3333${img.url_imagem}`} target="_blank" rel="noreferrer">
+                                        <img src={`http://localhost:3333${img.url_imagem}`} alt="Anexo do cliente" className="w-24 h-24 object-cover rounded-md border border-borda" />
+                                    </a>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
-                    <div className="bg-fundo-secundario p-6 rounded-lg">
-                        <h2 className="text-xl font-semibold mb-4">Adicionar Itens ao Orçamento</h2>
-                        <div className="flex gap-2 mb-4">
-                            <select onChange={e => handleAddItem('servico', e.target.value)} disabled={isLocked} className="flex-1 p-2 border rounded-lg bg-white disabled:bg-gray-200">
-                                <option value="">Adicionar Serviço</option>
-                                {servicosDisponiveis.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                            </select>
-                            <select onChange={e => handleAddItem('produto', e.target.value)} disabled={isLocked} className="flex-1 p-2 border rounded-lg bg-white disabled:bg-gray-200">
-                                <option value="">Adicionar Produto</option>
-                                {produtosDisponiveis.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                            </select>
-                        </div>
+                    {/* Card de Itens do Orçamento */}
+                    <div className="bg-fundo-secundario p-6 rounded-lg border border-borda">
+                        <h2 className="text-xl font-semibold mb-4 text-texto-principal">Itens do Orçamento</h2>
+                        {!isLocked && (
+                            <div className="flex flex-col md:flex-row gap-2 mb-4">
+                                <select onChange={e => handleAddItem('servico', e.target.value)} disabled={isLocked} className="flex-1 p-2 border rounded-lg bg-white disabled:bg-gray-200">
+                                    <option value="">Adicionar Serviço</option>
+                                    {servicosDisponiveis.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                                </select>
+                                <select onChange={e => handleAddItem('produto', e.target.value)} disabled={isLocked} className="flex-1 p-2 border rounded-lg bg-white disabled:bg-gray-200">
+                                    <option value="">Adicionar Produto</option>
+                                    {produtosDisponiveis.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                </select>
+                            </div>
+                        )}
                         <ul className="space-y-2">
                             {orcamento.servicos_selecionados?.map(s => (
-                                <li key={`s-${s.id}`} className="flex justify-between items-center bg-gray-700 p-2 rounded">
-                                    <span>{s.nome} - {Number(s.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                <li key={`s-${s.id}`} className="flex justify-between items-center bg-fundo-principal p-2 rounded">
+                                    <span className="text-texto-principal">{s.nome} - {Number(s.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                                     {!isLocked && (
-                                        <button onClick={() => handleRemoveItem('servico', s.id)} className="text-red-500 hover:text-red-400 font-bold text-lg px-2">
+                                        <button onClick={() => handleRemoveItem('servico', s.id)} className="text-erro hover:opacity-75 font-bold text-lg px-2">
                                             &times;
                                         </button>
                                     )}
                                 </li>
                             ))}
                             {orcamento.produtos_selecionados?.map(p => (
-                                <li key={`p-${p.id}`} className="flex justify-between items-center bg-gray-700 p-2 rounded">
-                                    <span>{p.nome} - {Number(p.preco_venda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                <li key={`p-${p.id}`} className="flex justify-between items-center bg-fundo-principal p-2 rounded">
+                                    <span className="text-texto-principal">{p.nome} - {Number(p.preco_venda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                                     {!isLocked && (
-                                        <button onClick={() => handleRemoveItem('produto', p.id)} className="text-red-500 hover:text-red-400 font-bold text-lg px-2">
+                                        <button onClick={() => handleRemoveItem('produto', p.id)} className="text-erro hover:opacity-75 font-bold text-lg px-2">
                                             &times;
                                         </button>
                                     )}
                                 </li>
                             ))}
+                            {(orcamento.servicos_selecionados?.length === 0 && orcamento.produtos_selecionados?.length === 0) && (
+                                <p className="text-texto-secundario text-center p-4">Nenhum item adicionado ao orçamento.</p>
+                            )}
                         </ul>
                     </div>
                 </div>
+                {/* Coluna Lateral de Finalização */}
                 <div className="space-y-6">
-                    <div className="bg-fundo-secundario p-6 rounded-lg">
-                        <h2 className="text-xl font-semibold mb-4">Finalização</h2>
+                    <div className="bg-fundo-secundario p-6 rounded-lg border border-borda sticky top-6">
+                        <h2 className="text-xl font-semibold mb-4 text-texto-principal">Finalização</h2>
                         <div>
                             <label className="text-sm font-semibold text-texto-secundario block mb-2">Notas para o Cliente</label>
-                            <textarea value={orcamento.notas_funcionario || ''} onChange={e => setOrcamento({ ...orcamento, notas_funcionario: e.target.value })} disabled={isLocked} className="w-full p-2 border rounded-lg bg-white disabled:bg-gray-200" rows={4}></textarea>
+                            <textarea value={orcamento.notas_funcionario || ''} onChange={e => setOrcamento({ ...orcamento, notas_funcionario: e.target.value })} disabled={isLocked} className="w-full p-2 border border-borda rounded-lg bg-white disabled:bg-gray-200 text-texto-principal" rows={4}></textarea>
                         </div>
                         <div className="mt-4">
                             <label className="text-sm font-semibold text-texto-secundario block mb-2">Condição de Pagamento</label>
-                            <select value={orcamento.condicao_pagamento_id || ''} onChange={e => setOrcamento({ ...orcamento, condicao_pagamento_id: parseInt(e.target.value) })} disabled={isLocked} className="w-full p-2 border rounded-lg bg-white disabled:bg-gray-200">
+                            <select value={orcamento.condicao_pagamento_id || ''} onChange={e => setOrcamento({ ...orcamento, condicao_pagamento_id: parseInt(e.target.value) })} disabled={isLocked} className="w-full p-2 border border-borda rounded-lg bg-white disabled:bg-gray-200 text-texto-principal">
                                 <option value="">Selecione...</option>
                                 {condicoes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                             </select>
                         </div>
-                        <div className="mt-4">
-                            <p className="text-texto-secundario">Valor Total Calculado</p>
-                            <p className="text-3xl font-bold">{valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        <div className="mt-6 border-t border-borda pt-4">
+                            <p className="text-texto-secundario">Valor Total do Orçamento</p>
+                            <p className="text-3xl font-bold text-primaria-padrao">{valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
                     </div>
                     {isLocked && (
-                        <div className="bg-yellow-500/20 text-yellow-300 p-3 rounded-md text-center text-sm font-semibold">
+                        <div className="bg-yellow-100 text-yellow-800 p-3 rounded-md text-center text-sm font-semibold">
                             Este orçamento já foi <strong>{orcamento.status}</strong> e não pode mais ser editado.
                         </div>
                     )}
-                    <Button onClick={handleSave} variant="primary" disabled={isLocked}>
-                        {isLocked ? `Orçamento ${orcamento.status}` : 'Guardar e Enviar para Cliente'}
-                    </Button>
-                    <Button onClick={() => navigate('/orcamentos-kanban')} variant="secondary">Voltar</Button>
+                    <div className="space-y-2">
+                        <Button onClick={handleSave} variant="primary" disabled={isLocked}>
+                            {isLocked ? `Orçamento ${orcamento.status}` : 'Guardar e Enviar para Cliente'}
+                        </Button>
+                        <Button onClick={() => navigate('/orcamentos-kanban')} variant="secondary">Voltar</Button>
+                    </div>
                 </div>
             </div>
         </div>
