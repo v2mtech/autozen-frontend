@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import { Button } from '../../components/Button';
 import SignatureCanvas from 'react-signature-canvas';
-import CarDiagram from './CarDiagram'; // Alterado para o novo componente
+import CarDiagram from './CarDiagram';
 import { Input } from '../../components/Input';
 
 // --- INTERFACES ---
@@ -15,7 +15,7 @@ interface Avaria {
     foto_url?: string;
 }
 interface ItemVerificado {
-    id: number;
+    id?: number; // ID pode não existir para novos itens
     nome_item: string;
     estado_checkin: string;
     estado_checkout: string | null;
@@ -24,6 +24,7 @@ interface ChecklistData {
     id: number;
     data_checkin: string;
     data_checkout: string | null;
+    quilometragem: number | null; // ✅ Campo adicionado
     assinatura_cliente_checkin: string;
     assinatura_cliente_checkout: string | null;
     observacoes_checkin: string;
@@ -35,14 +36,13 @@ interface ChecklistData {
 export default function ChecklistPage() {
     const { agendamentoId } = useParams<{ agendamentoId: string }>();
     const navigate = useNavigate();
-    const location = useLocation(); // Hook para ler o estado da navegação
+    const location = useLocation();
 
     const [loading, setLoading] = useState(true);
     const [checklist, setChecklist] = useState<ChecklistData | null>(null);
-    // O modo é definido pela URL para ser mais explícito
     const [modo, setModo] = useState<'checkin' | 'checkout' | 'view'>('checkin');
 
-    // Estados para os formulários
+    const [quilometragem, setQuilometragem] = useState<string>('');
     const [avarias, setAvarias] = useState<Avaria[]>([]);
     const [itens, setItens] = useState<Partial<ItemVerificado>[]>([
         { nome_item: 'Nível de Combustível', estado_checkin: '' },
@@ -54,7 +54,6 @@ export default function ChecklistPage() {
     const sigCanvas = useRef<SignatureCanvas>(null);
 
     useEffect(() => {
-        // Determina o modo baseado no estado passado pelo Link
         const modoInicial = location.state?.modo || 'checkin';
 
         const fetchChecklist = async () => {
@@ -65,7 +64,7 @@ export default function ChecklistPage() {
                     setChecklist(data);
                     setAvarias(data.avarias);
                     setItens(data.itens);
-                    // Define o modo com base nos dados e no link clicado
+                    setQuilometragem(data.quilometragem?.toString() || '');
                     if (modoInicial === 'checkout' && !data.data_checkout) {
                         setObservacoes(data.observacoes_checkout || '');
                         setModo('checkout');
@@ -107,7 +106,7 @@ export default function ChecklistPage() {
     };
 
     const handleSave = async () => {
-        if (sigCanvas.current?.isEmpty()) {
+        if (modo !== 'view' && sigCanvas.current?.isEmpty()) {
             alert("A assinatura do cliente é obrigatória.");
             return;
         }
@@ -116,12 +115,14 @@ export default function ChecklistPage() {
 
         if (modo === 'checkin') {
             try {
-                const checklistRes = await api.post('/checklist/checkin', {
+                const payload = {
                     agendamento_id: agendamentoId,
                     itens_verificados: itens,
                     assinatura_cliente_checkin: assinatura,
-                    observacoes_checkin: observacoes
-                });
+                    observacoes_checkin: observacoes,
+                    quilometragem: quilometragem ? parseInt(quilometragem) : null
+                };
+                const checklistRes = await api.post('/checklist/checkin', payload);
                 const checklistId = checklistRes.data.id;
 
                 for (const avaria of avarias) {
@@ -146,18 +147,18 @@ export default function ChecklistPage() {
         setLoading(false);
     };
 
-    if (loading) return <p>A carregar...</p>;
+    if (loading) return <p className="text-center text-texto-secundario">A carregar...</p>;
 
     return (
         <div>
-            <h1 className="text-4xl font-bold mb-6">
+            <h1 className="text-4xl font-bold mb-6 text-texto-principal">
                 {modo === 'checkin' && `Check-in do Veículo - OS #${agendamentoId}`}
                 {modo === 'checkout' && `Check-out do Veículo - OS #${agendamentoId}`}
                 {modo === 'view' && `Relatório de Vistoria - OS #${agendamentoId}`}
             </h1>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-fundo-secundario p-6 rounded-lg">
-                    <h2 className="text-xl font-bold mb-4">Diagrama de Avarias</h2>
+                <div className="bg-fundo-secundario p-6 rounded-lg shadow-sm border border-borda">
+                    <h2 className="text-xl font-bold mb-4 text-texto-principal">Diagrama de Avarias</h2>
                     <div className="relative border border-borda rounded-lg">
                         <CarDiagram onClick={modo === 'checkin' ? handleDiagramClick : undefined} />
                         {avarias.map((avaria, index) => (
@@ -169,44 +170,46 @@ export default function ChecklistPage() {
                 </div>
 
                 <div className="space-y-6">
-                    <div className="bg-fundo-secundario p-6 rounded-lg">
-                        <h2 className="text-xl font-bold mb-4">Itens Verificados</h2>
-                        <div className="space-y-2">
-                            <div className="grid grid-cols-3 items-center gap-4 font-bold text-texto-secundario"><span className="col-span-1">Item</span><span>Check-in</span><span>Check-out</span></div>
+                    <div className="bg-fundo-secundario p-6 rounded-lg shadow-sm border border-borda">
+                        <h2 className="text-xl font-bold mb-4 text-texto-principal">Itens Verificados</h2>
+                        <div className="space-y-3">
+                            {/* ✅ CAMPO DE QUILOMETRAGEM ADICIONADO */}
+                            <Input label="Quilometragem (KM)" type="number" value={quilometragem} onChange={e => setQuilometragem(e.target.value)} disabled={modo !== 'checkin'} />
+                            <div className="grid grid-cols-3 items-center gap-4 font-bold text-texto-secundario pt-2"><span className="col-span-1">Item</span><span>Check-in</span><span>Check-out</span></div>
                             {itens.map((item, index) => (
                                 <div key={item.id || index} className="grid grid-cols-3 items-center gap-4">
-                                    <label className="col-span-1">{item.nome_item}</label>
-                                    <Input value={item.estado_checkin || ''} onChange={e => modo === 'checkin' && handleItemChange(index, e.target.value)} disabled={modo !== 'checkin'} />
-                                    <Input value={item.estado_checkout || ''} onChange={e => modo === 'checkout' && handleItemChange(index, e.target.value)} disabled={modo !== 'checkout'} />
+                                    <label className="col-span-1 text-texto-principal">{item.nome_item}</label>
+                                    <Input value={item.estado_checkin || ''} onChange={e => handleItemChange(index, e.target.value)} disabled={modo !== 'checkin'} />
+                                    <Input value={item.estado_checkout || ''} onChange={e => handleItemChange(index, e.target.value)} disabled={modo !== 'checkout'} />
                                 </div>
                             ))}
                         </div>
                     </div>
-                    <div className="bg-fundo-secundario p-6 rounded-lg">
-                        <h2 className="text-xl font-bold mb-4">Observações Gerais</h2>
+                    <div className="bg-fundo-secundario p-6 rounded-lg shadow-sm border border-borda">
+                        <h2 className="text-xl font-bold mb-4 text-texto-principal">Observações Gerais</h2>
                         {modo !== 'checkin' && checklist?.observacoes_checkin && (
-                            <div className='mb-4'><p className='text-sm font-bold text-texto-secundario'>Obs. do Check-in:</p><p className="p-2 bg-gray-800 rounded-md">{checklist.observacoes_checkin}</p></div>
+                            <div className='mb-4'><p className='text-sm font-bold text-texto-secundario'>Obs. do Check-in:</p><p className="p-2 bg-fundo-principal rounded-md text-texto-secundario">{checklist.observacoes_checkin}</p></div>
                         )}
-                        <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={4} className="w-full p-2 border rounded-lg bg-white text-gray-800" disabled={modo === 'view'} placeholder={modo === 'checkout' ? "Adicione observações de check-out aqui..." : "Adicione observações de check-in aqui..."} />
+                        <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={4} className="w-full p-2 border rounded-lg bg-white text-texto-principal" disabled={modo === 'view'} placeholder={modo === 'checkout' ? "Adicione observações de check-out aqui..." : "Adicione observações de check-in aqui..."} />
                     </div>
                     {(modo === 'checkin' || modo === 'checkout') && (
-                        <div className="bg-fundo-secundario p-6 rounded-lg">
-                            <h2 className="text-xl font-bold mb-4">Assinatura do Cliente</h2>
+                        <div className="bg-fundo-secundario p-6 rounded-lg shadow-sm border border-borda">
+                            <h2 className="text-xl font-bold mb-4 text-texto-principal">Assinatura do Cliente</h2>
                             <div className="bg-white border border-borda rounded-lg"><SignatureCanvas ref={sigCanvas} canvasProps={{ className: 'w-full h-32' }} /></div>
-                            <Button variant="secondary" onClick={() => sigCanvas.current?.clear()} className="w-auto text-xs py-1 px-2 mt-2">Limpar</Button>
+                            <Button variant="secondary" onClick={() => sigCanvas.current?.clear()} className="w-auto !text-xs !py-1 !px-2 mt-2">Limpar</Button>
                         </div>
                     )}
                     {modo === 'view' && checklist && (
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-fundo-secundario p-4 rounded-lg"><h3 className="font-bold mb-2">Assinatura Check-in</h3><img src={checklist.assinatura_cliente_checkin} alt="Assinatura Check-in" /></div>
-                            <div className="bg-fundo-secundario p-4 rounded-lg"><h3 className="font-bold mb-2">Assinatura Check-out</h3>{checklist.assinatura_cliente_checkout ? <img src={checklist.assinatura_cliente_checkout} alt="Assinatura Check-out" /> : <p>Pendente</p>}</div>
+                            <div className="bg-fundo-secundario p-4 rounded-lg border border-borda"><h3 className="font-bold mb-2 text-texto-principal">Assinatura Check-in</h3><img src={checklist.assinatura_cliente_checkin} alt="Assinatura Check-in" /></div>
+                            <div className="bg-fundo-secundario p-4 rounded-lg border border-borda"><h3 className="font-bold mb-2 text-texto-principal">Assinatura Check-out</h3>{checklist.assinatura_cliente_checkout ? <img src={checklist.assinatura_cliente_checkout} alt="Assinatura Check-out" /> : <p className="text-texto-secundario">Pendente</p>}</div>
                         </div>
                     )}
                 </div>
             </div>
-            <div className="mt-8 flex justify-end">
+            <div className="mt-8 flex justify-end gap-4">
+                <Button onClick={() => navigate(`/ordem-de-servico/${agendamentoId}`)} variant="secondary" className="w-auto text-lg px-8">Voltar para a OS</Button>
                 {modo !== 'view' && <Button onClick={handleSave} disabled={loading} className="w-auto text-lg px-8">{loading ? 'A guardar...' : `Confirmar ${modo === 'checkin' ? 'Check-in' : 'Check-out'}`}</Button>}
-                {modo === 'view' && <Button onClick={() => navigate(`/ordem-de-servico/${agendamentoId}`)} className="w-auto text-lg px-8">Voltar para a OS</Button>}
             </div>
         </div>
     );

@@ -220,7 +220,7 @@ export default function DashboardLayout() {
 
                     <div className={`h-full bg-fundo-secundario border-r border-borda flex flex-col transition-all duration-300 overflow-hidden ${isDrawerOpen ? 'w-64' : 'w-0'}`}>
                         <div className="p-4 border-b border-borda">
-                            <h1 className="text-2xl font-bold text-primaria-padrao">NaniSound</h1>
+                            <h1 className="text-2xl font-bold text-primaria-padrao">Vértice Auto</h1>
                         </div>
                         <div className="p-4">
                             <p className="text-sm font-bold truncate">{empresaLogada?.nome_empresa}</p>

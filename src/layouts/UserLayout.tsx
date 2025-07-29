@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/Button';
-import { 
-    FaStore, FaFileSignature, FaClipboardList, FaTicketAlt, FaUserCircle, 
+import {
+    FaStore, FaFileSignature, FaClipboardList, FaTicketAlt, FaUserCircle,
     FaSignOutAlt, FaChevronLeft, FaChevronRight, FaCalendarAlt, FaBars
 } from 'react-icons/fa';
 
@@ -34,7 +34,7 @@ interface NavItem {
 // A estrutura agora é baseada em categorias, como no DashboardLayout
 interface NavCategory {
     title: string;
-    icon: React.ElementType; 
+    icon: React.ElementType;
     links: NavItem[];
 }
 
@@ -83,7 +83,7 @@ export default function UserLayout() {
         logout();
         window.location.href = '/login';
     };
-    
+
     const handleCategoryClick = (categoryTitle: string) => {
         if (isDrawerOpen && activeCategory === categoryTitle) {
             setIsDrawerOpen(false);
@@ -131,34 +131,34 @@ export default function UserLayout() {
 
                     <div className={`h-full bg-fundo-secundario border-r border-borda flex flex-col transition-all duration-300 overflow-hidden ${isDrawerOpen ? 'w-64' : 'w-0'}`}>
                         <div className="p-4 border-b border-borda">
-                             <h1 className="text-2xl font-bold text-primaria-padrao">NaniSound</h1>
+                            <h1 className="text-2xl font-bold text-primaria-padrao">Vértice Auto</h1>
                         </div>
                         <div className="p-4">
                             <p className="text-sm font-bold truncate">{userName}</p>
                             <p className="text-xs text-texto-secundario truncate">{userEmail}</p>
                         </div>
                         <nav className="flex-1 overflow-y-auto pt-2">
-                           {navigationStructure.map((category) => (
-                               <div key={category.title} className={`${activeCategory === category.title ? 'block' : 'hidden'}`}>
-                                   <h2 className="px-4 mb-2 text-xs font-bold tracking-wider text-texto-secundario uppercase">
-                                       {category.title}
-                                   </h2>
-                                   <ul className="space-y-1 px-2">
-                                       {category.links.map(link => (
-                                           <li key={link.path}>
-                                               <NavLink 
-                                                    to={link.path} 
+                            {navigationStructure.map((category) => (
+                                <div key={category.title} className={`${activeCategory === category.title ? 'block' : 'hidden'}`}>
+                                    <h2 className="px-4 mb-2 text-xs font-bold tracking-wider text-texto-secundario uppercase">
+                                        {category.title}
+                                    </h2>
+                                    <ul className="space-y-1 px-2">
+                                        {category.links.map(link => (
+                                            <li key={link.path}>
+                                                <NavLink
+                                                    to={link.path}
                                                     onClick={handleLinkClick}
                                                     className={({ isActive }) => `flex items-center py-2 px-4 rounded-lg transition-colors text-sm font-semibold ${isActive ? 'bg-primaria-padrao text-white' : 'text-texto-secundario hover:bg-primaria-intermediario hover:text-white'}`}
                                                 >
-                                                   <link.icon className="h-5 w-5 mr-3" />
-                                                   <span>{link.label}</span>
-                                               </NavLink>
-                                           </li>
-                                       ))}
-                                   </ul>
-                               </div>
-                           ))}
+                                                    <link.icon className="h-5 w-5 mr-3" />
+                                                    <span>{link.label}</span>
+                                                </NavLink>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))}
                         </nav>
                     </div>
                 </aside>

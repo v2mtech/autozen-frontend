@@ -32,7 +32,7 @@ export async function sendReminderEmail(details: ReminderDetails) {
     });
 
     const mailOptions = {
-        from: `NaniSound Agendamentos <${process.env.EMAIL_USER}>`,
+        from: `Vértice Auto Agendamentos <${process.env.EMAIL_USER}>`,
         to: details.clienteEmail,
         subject: `Lembrete de Agendamento em ${details.empresaNome}`,
         html: `
@@ -44,7 +44,7 @@ export async function sendReminderEmail(details: ReminderDetails) {
                 <p>Caso precise reagendar ou cancelar, por favor, entre em contato com o estabelecimento ou acesse nossa plataforma.</p>
                 <br>
                 <p>Atenciosamente,</p>
-                <p>Equipe NaniSound</p>
+                <p>Equipe Vértice Auto</p>
             </div>
         `,
     };
