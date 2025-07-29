@@ -17,6 +17,7 @@ interface AnalyticsData {
     servicosPorFuncionario: { nome: string; quantidade: number }[];
 }
 
+// ... (componente ChartMenu e função exportToXLSX permanecem iguais)
 const ChartMenu = ({ onExportXLSX }: { onExportXLSX: () => void }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -52,11 +53,13 @@ const exportToXLSX = (data: any[], fileName: string) => {
     XLSX.writeFile(wb, `${fileName}.xlsx`);
 };
 
+
 const getISODate = (date: Date) => date.toISOString().split('T')[0];
 
 export default function DashboardPage() {
     const [analyticsData, setAnalyticsData] = useState<Partial<AnalyticsData>>({});
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [dataInicio, setDataInicio] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() - 30);
@@ -66,11 +69,17 @@ export default function DashboardPage() {
 
     const fetchDashboardData = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             const response = await api.get(`/relatorios/dashboard-analytics`, { params: { data_inicio: dataInicio, data_fim: dataFim } });
-            setAnalyticsData(response.data);
-        } catch (error) {
-            console.error(error);
+            if (response.data) {
+                setAnalyticsData(response.data);
+            } else {
+                throw new Error("A resposta da API não continha dados.");
+            }
+        } catch (err) {
+            console.error("Erro ao buscar dados do dashboard:", err);
+            setError('Não foi possível carregar os dados do dashboard. Verifique a sua ligação ou tente mais tarde.');
         } finally {
             setLoading(false);
         }
@@ -78,7 +87,6 @@ export default function DashboardPage() {
 
     useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
 
-    // ✅ INÍCIO DA CORREÇÃO DE ROBUSTEZ
     const pagamentosData = {
         labels: Array.isArray(analyticsData.faturamentoPorFormaPagamento) ? analyticsData.faturamentoPorFormaPagamento.map(p => p.nome) : [],
         datasets: [{ data: Array.isArray(analyticsData.faturamentoPorFormaPagamento) ? analyticsData.faturamentoPorFormaPagamento.map(p => p.total) : [], backgroundColor: ['#a30101ff', '#eb3d12ff', '#fc9f54ff', '#f1c971ff', '#142738'] }],
@@ -98,7 +106,20 @@ export default function DashboardPage() {
         labels: Array.isArray(analyticsData.topServicos) ? analyticsData.topServicos.map(s => s.nome) : [],
         datasets: [{ data: Array.isArray(analyticsData.topServicos) ? analyticsData.topServicos.map(s => s.quantidade) : [], backgroundColor: ['#a30101ff', '#eb3d12ff', '#fc9f54ff', '#f1c971ff', '#142738'] }],
     };
-    // ✅ FIM DA CORREÇÃO DE ROBUSTEZ
+
+    if (loading) {
+        return <p className="text-center text-texto-secundario p-10">A carregar dados do Dashboard...</p>;
+    }
+
+    if (error) {
+        return (
+            <div className="bg-red-500/10 text-red-300 p-8 rounded-lg text-center">
+                <h2 className="text-2xl font-bold mb-2">Ocorreu um Erro</h2>
+                <p>{error}</p>
+                <Button onClick={fetchDashboardData} className="mt-4 w-auto">Tentar Novamente</Button>
+            </div>
+        );
+    }
 
     return (
         <div>

@@ -1,7 +1,7 @@
 import axios, { AxiosHeaders } from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://7fa932ada88f.ngrok-free.app',
+  baseURL: 'http://localhost:3333'
 });
 
 // Interceptor para adicionar o token JWT em todas as requisições
