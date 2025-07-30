@@ -10,7 +10,7 @@ import {
     FaSignOutAlt, FaBars, FaBrain,
     FaHistory,
     FaKey,
-    FaQuestionCircle, FaFileUpload
+    FaQuestionCircle
 } from 'react-icons/fa';
 
 // --- Tipagem dos Ícones ---
@@ -46,7 +46,6 @@ const IconBrain = FaBrain as React.ElementType;
 const IconHistory = FaHistory as React.ElementType;
 const IconKey = FaKey as React.ElementType;
 const IconQuestionCircle = FaQuestionCircle as React.ElementType;
-const IconFileUpload = FaFileUpload as React.ElementType;
 
 interface Empresa {
     id: number;
@@ -58,7 +57,7 @@ interface NavItem {
     path: string;
     label: string;
     icon: React.ElementType;
-    permission?: string; // Permissão necessária para acessar o link
+    permission?: string;
 }
 
 interface NavCategory {
@@ -67,7 +66,6 @@ interface NavCategory {
     links: NavItem[];
 }
 
-// Estrutura de navegação com categorias e links
 const navigationStructure: NavCategory[] = [
     {
         title: 'GESTÃO', icon: IconTachometer,
@@ -76,7 +74,7 @@ const navigationStructure: NavCategory[] = [
             { path: '/kanban', label: 'Quadro OS', icon: IconClipboardList, permission: 'ver_quadro_os' },
             { path: '/orcamentos-kanban', label: 'Orçamentos Kanban', icon: IconFileSignature, permission: 'ver_orcamentos' },
             { path: '/agenda', label: 'Agenda', icon: IconCalendarAlt, permission: 'ver_agenda' },
-            { path: '/historico-cliente', label: 'Histórico de Clientes', icon: IconUsers, permission: 'ver_dashboard' }, // Exemplo de permissão
+            { path: '/historico-cliente', label: 'Histórico de Clientes', icon: IconUsers, permission: 'ver_dashboard' },
         ]
     },
     {
@@ -94,7 +92,6 @@ const navigationStructure: NavCategory[] = [
             { path: '/estoque', label: 'Estoque', icon: IconWarehouse, permission: 'gerir_produtos' },
             { path: '/fechamento-estoque', label: 'Fechamento de Estoque', icon: IconExchangeAlt, permission: 'gerir_produtos' },
             { path: '/fornecedores', label: 'Fornecedores', icon: IconTruck, permission: 'gerir_fornecedores' },
-            { path: '/entrada-nota', label: 'Entrada por XML', icon: IconFileUpload, permission: 'gerir_produtos' },
             { path: '/posicao-estoque', label: 'Posição do Estoque', icon: IconChartPie, permission: 'ver_relatorios_financeiros' },
         ]
     },
@@ -117,7 +114,7 @@ const navigationStructure: NavCategory[] = [
             { path: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: IconChartPie, permission: 'ver_relatorios_financeiros' },
             { path: '/formas-pagamento', label: 'Formas de Pagamento', icon: IconMoneyBillWave, permission: 'gerir_contas' },
             { path: '/condicoes-pagamento', label: 'Condições de Pagamento', icon: IconFileAlt, permission: 'gerir_contas' },
-            { path: '/cashback', label: 'Cashback', icon: IconGift, permission: 'gerir_servicos' }, // Exemplo
+            { path: '/cashback', label: 'Cashback', icon: IconGift, permission: 'gerir_servicos' },
             { path: '/curva-abc', label: 'Curva ABC', icon: IconChartPie, permission: 'ver_relatorios_financeiros' },
             { path: '/auditoria-estoque', label: 'Auditoria de Estoque', icon: IconFileAlt, permission: 'ver_relatorios_financeiros' },
         ]
@@ -149,17 +146,15 @@ const navigationStructure: NavCategory[] = [
 ];
 
 export default function DashboardLayout() {
-    // ✅ OBTEMOS O 'user', 'logout' E AS 'permissoes' DO CONTEXTO DE AUTENTICAÇÃO
     const { user, logout, permissoes } = useAuth();
     const empresaLogada = user as Empresa;
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
-    // ✅ FUNÇÃO PARA VERIFICAR SE O UTILIZADOR TEM PERMISSÃO
     const hasPermission = (permission?: string) => {
-        if (!permission) return true; // Se o link não requer permissão, mostra
-        if (permissoes.includes('todas')) return true; // Se for 'empresa', tem acesso a tudo
-        return permissoes.includes(permission); // Verifica se a permissão existe no array do funcionário
+        if (!permission) return true;
+        if (permissoes.includes('todas')) return true;
+        return permissoes.includes(permission);
     };
 
     const handleLogout = () => {
@@ -187,14 +182,13 @@ export default function DashboardLayout() {
             <div className="flex">
                 <aside className="fixed top-0 left-0 h-full bg-fundo-secundario flex z-30">
                     <div className="w-20 flex flex-col items-center py-4 border-r border-borda">
-                        <button onClick={() => { setIsDrawerOpen(!isDrawerOpen); setActiveCategory(isDrawerOpen ? null : (activeCategory || navigationStructure[0].title)) }} className="p-2 mb-4 rounded-lg hover:bg-gray-700 text-texto-secundario hover:text-white">
+                        <button onClick={() => { setIsDrawerOpen(!isDrawerOpen); setActiveCategory(isDrawerOpen ? null : (activeCategory || navigationStructure[0].title)) }} className="p-2 mb-4 rounded-lg hover:bg-fundo-principal text-texto-secundario hover:text-primaria-padrao">
                             <IconBars size={24} />
                         </button>
                         <nav className="flex-1 flex flex-col items-center space-y-4">
                             {navigationStructure.map((category) => {
-                                // ✅ Filtra para ver se algum link da categoria é visível
                                 const isCategoryVisible = category.links.some(link => hasPermission(link.permission));
-                                if (!isCategoryVisible) return null; // Se não houver links visíveis, não mostra o ícone da categoria
+                                if (!isCategoryVisible) return null;
 
                                 return (
                                     <button
@@ -219,11 +213,13 @@ export default function DashboardLayout() {
                     </div>
 
                     <div className={`h-full bg-fundo-secundario border-r border-borda flex flex-col transition-all duration-300 overflow-hidden ${isDrawerOpen ? 'w-64' : 'w-0'}`}>
+                        {/* ✅ INÍCIO DA CORREÇÃO: Substituição do H1 pelo IMG */}
                         <div className="p-4 border-b border-borda">
-                            <h1 className="text-2xl font-bold text-primaria-padrao">Vértice Auto</h1>
+                            <img src="/assets/logo.png" alt="Vértice Auto Logo" className="w-32 h-auto" />
                         </div>
+                        {/* ✅ FIM DA CORREÇÃO */}
                         <div className="p-4">
-                            <p className="text-sm font-bold truncate">{empresaLogada?.nome_empresa}</p>
+                            <p className="text-sm font-bold truncate text-texto-principal">{empresaLogada?.nome_empresa}</p>
                             <p className="text-xs text-texto-secundario truncate">{empresaLogada?.email}</p>
                         </div>
                         <nav className="flex-1 overflow-y-auto pt-2">
@@ -234,7 +230,6 @@ export default function DashboardLayout() {
                                     </h2>
                                     <ul className="space-y-1 px-2">
                                         {category.links.map(link => {
-                                            // ✅ Apenas renderiza o link se o utilizador tiver permissão
                                             if (!hasPermission(link.permission)) return null;
 
                                             return (

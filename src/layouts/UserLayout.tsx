@@ -30,8 +30,6 @@ interface NavItem {
     icon: React.ElementType;
 }
 
-// --- INÍCIO DA CORREÇÃO ---
-// A estrutura agora é baseada em categorias, como no DashboardLayout
 interface NavCategory {
     title: string;
     icon: React.ElementType;
@@ -70,13 +68,12 @@ const navigationStructure: NavCategory[] = [
         ]
     }
 ];
-// --- FIM DA CORREÇÃO ---
 
 export default function UserLayout() {
     const { user, logout } = useAuth();
     const userName = (user as User)?.nome || 'Cliente';
     const userEmail = (user as User)?.email || '';
-    const [isDrawerOpen, setIsDrawerOpen] = useState(false); // Inicia fechado
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
     const handleLogout = () => {
@@ -104,7 +101,7 @@ export default function UserLayout() {
             <div className="flex">
                 <aside className="fixed top-0 left-0 h-full bg-fundo-secundario flex z-30">
                     <div className="w-20 flex flex-col items-center py-4 border-r border-borda">
-                        <button onClick={() => { setIsDrawerOpen(!isDrawerOpen); setActiveCategory(isDrawerOpen ? null : (activeCategory || navigationStructure[0].title)) }} className="p-2 mb-4 rounded-lg hover:bg-gray-700 text-texto-secundario hover:text-white">
+                        <button onClick={() => { setIsDrawerOpen(!isDrawerOpen); setActiveCategory(isDrawerOpen ? null : (activeCategory || navigationStructure[0].title)) }} className="p-2 mb-4 rounded-lg hover:bg-fundo-principal text-texto-secundario hover:text-primaria-padrao">
                             <IconBars size={24} />
                         </button>
                         <nav className="flex-1 flex flex-col items-center space-y-4">
@@ -116,7 +113,7 @@ export default function UserLayout() {
                                     title={category.title}
                                 >
                                     <category.icon size={22} />
-                                    <span className="absolute left-full ml-4 p-2 w-auto min-w-max rounded-md shadow-md text-white bg-gray-800 text-xs font-bold transition-all opacity-0 group-hover:opacity-100">
+                                    <span className="absolute left-full ml-4 p-2 w-auto min-w-max rounded-md shadow-md text-texto-principal bg-fundo-principal text-xs font-bold transition-all opacity-0 group-hover:opacity-100">
                                         {category.title}
                                     </span>
                                 </button>
@@ -130,11 +127,13 @@ export default function UserLayout() {
                     </div>
 
                     <div className={`h-full bg-fundo-secundario border-r border-borda flex flex-col transition-all duration-300 overflow-hidden ${isDrawerOpen ? 'w-64' : 'w-0'}`}>
+                        {/* ✅ INÍCIO DA CORREÇÃO: Substituição do H1 pelo IMG */}
                         <div className="p-4 border-b border-borda">
-                            <h1 className="text-2xl font-bold text-primaria-padrao">Vértice Auto</h1>
+                            <img src="/assets/logo.png" alt="Vértice Auto Logo" className="w-32 h-auto" />
                         </div>
+                        {/* ✅ FIM DA CORREÇÃO */}
                         <div className="p-4">
-                            <p className="text-sm font-bold truncate">{userName}</p>
+                            <p className="text-sm font-bold truncate text-texto-principal">{userName}</p>
                             <p className="text-xs text-texto-secundario truncate">{userEmail}</p>
                         </div>
                         <nav className="flex-1 overflow-y-auto pt-2">
