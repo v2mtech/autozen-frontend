@@ -1,41 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
-// Interface para representar um vídeo que vem do backend
 interface Video {
-    id: number;
+    id: string;
     titulo: string;
     url_video: string;
 }
 
 export default function MeusVideosPage() {
-    // States para o formulário de NOVO vídeo
+    const { user } = useAuth();
     const [novoTitulo, setNovoTitulo] = useState('');
     const [novaUrlVideo, setNovaUrlVideo] = useState('');
-
-    // States gerais da página
     const [videos, setVideos] = useState<Video[]>([]);
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(true);
-
-    // States para o MODAL DE EDIÇÃO
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
 
-    // Função para buscar os vídeos já cadastrados
     const fetchVideos = async () => {
+        if (!user) return;
         setLoading(true);
         try {
-            const response = await api.get('/empresas/profile');
-            if (response.data && response.data.id) {
-                const videosResponse = await api.get(`/empresas/${response.data.id}`);
-                setVideos(videosResponse.data.videos || []);
-            }
+            const videosRef = collection(db, 'empresa_videos');
+            const q = query(videosRef, where("empresa_id", "==", user.uid));
+            const querySnapshot = await getDocs(q);
+            const videosList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Video));
+            setVideos(videosList);
         } catch (error) {
-            console.error("Erro ao buscar vídeos", error);
+            console.error("Erro ao buscar vÃ­deos", error);
         } finally {
             setLoading(false);
         }
@@ -43,24 +40,27 @@ export default function MeusVideosPage() {
 
     useEffect(() => {
         fetchVideos();
-    }, []);
+    }, [user]);
 
-    // Função para ADICIONAR um novo vídeo
     const handleAddSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!user) return;
         setMessage('');
         try {
-            await api.post('/empresas/videos', { titulo: novoTitulo, url_video: novaUrlVideo });
-            setMessage('Vídeo cadastrado com sucesso!');
+            await addDoc(collection(db, 'empresa_videos'), {
+                empresa_id: user.uid,
+                titulo: novoTitulo,
+                url_video: novaUrlVideo
+            });
+            setMessage('VÃ­deo cadastrado com sucesso!');
             setNovoTitulo('');
             setNovaUrlVideo('');
             fetchVideos();
         } catch (error) {
-            setMessage('Erro ao cadastrar o vídeo.');
+            setMessage('Erro ao cadastrar o vÃ­deo.');
         }
     };
 
-    // Funções para EDITAR um vídeo
     const handleOpenEditModal = (video: Video) => {
         setCurrentVideo(video);
         setIsModalOpen(true);
@@ -69,85 +69,82 @@ export default function MeusVideosPage() {
     const handleUpdateSubmit = async () => {
         if (!currentVideo) return;
         try {
-            await api.put(`/empresas/videos/${currentVideo.id}`, {
+            const videoRef = doc(db, 'empresa_videos', currentVideo.id);
+            await updateDoc(videoRef, {
                 titulo: currentVideo.titulo,
                 url_video: currentVideo.url_video
             });
             setIsModalOpen(false);
-            fetchVideos(); // Atualiza a lista
+            fetchVideos();
         } catch (error) {
-            alert('Não foi possível atualizar o vídeo.');
+            alert('NÃ£o foi possÃ­vel atualizar o vÃ­deo.');
         }
     };
 
-    // Função para EXCLUIR um vídeo
-    const handleDelete = async (videoId: number) => {
-        if (window.confirm('Tem certeza que deseja excluir este vídeo?')) {
+    const handleDelete = async (videoId: string) => {
+        if (window.confirm('Tem certeza que deseja excluir este vÃ­deo?')) {
             try {
-                await api.delete(`/empresas/videos/${videoId}`);
-                fetchVideos(); // Atualiza a lista
+                await deleteDoc(doc(db, 'empresa_videos', videoId));
+                fetchVideos();
             } catch (error) {
-                alert('Não foi possível excluir o vídeo.');
+                alert('NÃ£o foi possÃ­vel excluir o vÃ­deo.');
             }
         }
     };
 
     return (
         <div>
-            <h1 className="text-4xl font-bold mb-6">Gerenciar Vídeos</h1>
-            <p className="text-gray-400 mb-8">Adicione vídeos do YouTube para serem exibidos na página da sua loja.</p>
+            <h1 className="text-4xl font-bold text-texto-principal mb-6">Gerenciar VÃ­deos</h1>
+            <p className="text-texto-secundario mb-8">Adicione vÃ­deos do YouTube para serem exibidos na pÃ¡gina da sua loja.</p>
 
-            {/* Formulário para Adicionar novo vídeo */}
-            <form onSubmit={handleAddSubmit} className="bg-fundo-secundario p-8 rounded-lg max-w-2xl mx-auto mb-10">
+            <form onSubmit={handleAddSubmit} className="bg-fundo-secundario p-8 rounded-lg shadow-sm border border-borda max-w-2xl mx-auto mb-10">
                 <div className="space-y-4">
-                    <Input label="Título do Novo Vídeo" value={novoTitulo} onChange={e => setNovoTitulo(e.target.value)} required placeholder="Ex: Demonstração do Serviço X" />
-                    <Input label="URL do Vídeo no YouTube" value={novaUrlVideo} onChange={e => setNovaUrlVideo(e.target.value)} required placeholder="Cole o link completo do YouTube aqui" />
+                    <Input label="TÃ­tulo do Novo VÃ­deo" value={novoTitulo} onChange={e => setNovoTitulo(e.target.value)} required placeholder="Ex: DemonstraÃ§Ã£o do ServiÃ§o X" />
+                    <Input label="URL do VÃ­deo no YouTube" value={novaUrlVideo} onChange={e => setNovaUrlVideo(e.target.value)} required placeholder="Cole o link completo do YouTube aqui" />
                 </div>
-                {message && <p className="text-center mt-4 text-green-400">{message}</p>}
+                {message && <p className="text-center mt-4 text-green-500">{message}</p>}
                 <div className="mt-6">
-                    <Button type="submit">Adicionar Vídeo</Button>
+                    <Button type="submit">Adicionar VÃ­deo</Button>
                 </div>
             </form>
 
-            {/* Lista de Vídeos Cadastrados */}
-            <h2 className="text-2xl font-bold mt-10 mb-4">Vídeos Cadastrados</h2>
+            <h2 className="text-2xl font-bold mt-10 mb-4 text-texto-principal">VÃ­deos Cadastrados</h2>
             {loading ? <p>Carregando...</p> : (
                 <div className="space-y-3">
                     {videos.length > 0 ? videos.map(video => (
-                        <div key={video.id} className="bg-fundo-secundario p-4 rounded-lg flex justify-between items-center">
+                        <div key={video.id} className="bg-fundo-secundario p-4 rounded-lg flex justify-between items-center border border-borda">
                             <div>
-                                <p className="text-white font-semibold">{video.titulo}</p>
-                                <a href={video.url_video} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:underline">
+                                <p className="text-texto-principal font-semibold">{video.titulo}</p>
+                                <a href={video.url_video} target="_blank" rel="noopener noreferrer" className="text-xs text-texto-secundario hover:underline">
                                     {video.url_video}
                                 </a>
                             </div>
                             <div className="flex gap-4">
-                                <button onClick={() => handleOpenEditModal(video)} className="font-semibold text-yellow-400 hover:text-yellow-300">Editar</button>
-                                <button onClick={() => handleDelete(video.id)} className="font-semibold text-red-500 hover:text-red-400">Excluir</button>
+                                <button onClick={() => handleOpenEditModal(video)} className="font-semibold text-primaria-padrao hover:text-primaria-escuro">Editar</button>
+                                <button onClick={() => handleDelete(video.id)} className="font-semibold text-erro hover:opacity-75">Excluir</button>
                             </div>
                         </div>
-                    )) : <p className="text-gray-500">Nenhum vídeo cadastrado.</p>}
+                    )) : <p className="text-texto-secundario">Nenhum vÃ­deo cadastrado.</p>}
                 </div>
             )}
 
-            {/* Modal de Edição */}
             {currentVideo && (
-                <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Editar Vídeo">
+                <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Editar VÃ­deo">
                     <div className="space-y-4">
                         <Input
-                            label="Título do Vídeo"
+                            label="TÃ­tulo do VÃ­deo"
                             value={currentVideo.titulo}
                             onChange={e => setCurrentVideo({ ...currentVideo, titulo: e.target.value })}
                         />
                         <Input
-                            label="URL do Vídeo"
+                            label="URL do VÃ­deo"
                             value={currentVideo.url_video}
                             onChange={e => setCurrentVideo({ ...currentVideo, url_video: e.target.value })}
                         />
                     </div>
-                    <div className="flex justify-end gap-4 pt-6">
+                    <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-borda">
                         <Button onClick={() => setIsModalOpen(false)} variant="secondary">Cancelar</Button>
-                        <Button onClick={handleUpdateSubmit} variant="primary">Salvar Alterações</Button>
+                        <Button onClick={handleUpdateSubmit} variant="primary">Salvar AlteraÃ§Ãµes</Button>
                     </div>
                 </Modal>
             )}

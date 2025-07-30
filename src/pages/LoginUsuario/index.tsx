@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
@@ -9,16 +9,18 @@ export default function LoginUsuarioPage() {
   const [senha, setSenha] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { loginUsuario } = useAuth(); 
+  const { loginUsuario } = useAuth();
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await loginUsuario({ email, senha });
+      await loginUsuario(email, senha);
+      // A navegação agora é gerida pelo AuthContext após o login ser verificado
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao tentar fazer login.');
+      setError('Email ou senha inválidos. Por favor, tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -31,26 +33,26 @@ export default function LoginUsuarioPage() {
         <p className="text-auth-text-light mt-2">Bem-vindo de volta!</p>
       </div>
       <form onSubmit={handleLogin} className="space-y-6">
-        <Input 
-          label="O seu Email" 
-          type="email" 
-          value={email} 
-          onChange={(e) => setEmail(e.target.value)} 
-          required 
+        <Input
+          label="O seu Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
         />
-        <Input 
-          label="A sua Senha" 
-          type="password" 
-          value={senha} 
-          onChange={(e) => setSenha(e.target.value)} 
-          required 
+        <Input
+          label="A sua Senha"
+          type="password"
+          value={senha}
+          onChange={(e) => setSenha(e.target.value)}
+          required
         />
         {error && <p className="text-red-500 text-sm text-center">{error}</p>}
         <Button type="submit" variant="primary" disabled={loading}>
           {loading ? 'A entrar...' : 'Entrar'}
         </Button>
       </form>
-       <p className="text-center text-auth-text-light text-sm">
+      <p className="text-center text-auth-text-light text-sm">
         Não tem uma conta?{' '}
         <Link to="/cadastro/usuario" className="font-semibold text-auth-button hover:underline">
           Registe-se

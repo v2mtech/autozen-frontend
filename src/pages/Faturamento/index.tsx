@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import * as XLSX from 'xlsx';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // Interfaces
-interface Servico {
-    id: number;
-    nome: string;
-}
-
 interface DetalheFaturamento {
-    agendamento_id: number;
+    agendamento_id: string;
     data_hora_inicio: string;
     servico_nome: string;
     servico_preco: string;
@@ -25,34 +20,31 @@ interface RelatorioFaturamento {
 }
 
 export default function FaturamentoPage() {
-    const [servicos, setServicos] = useState<Servico[]>([]);
     const [relatorio, setRelatorio] = useState<RelatorioFaturamento | null>(null);
     const [loading, setLoading] = useState(false);
-
     const [dataInicio, setDataInicio] = useState(new Date().toISOString().split('T')[0]);
     const [dataFim, setDataFim] = useState(new Date().toISOString().split('T')[0]);
-    const [servicoId, setServicoId] = useState('');
 
-    useEffect(() => {
-        api.get<Servico[]>('/servicos').then(response => {
-            setServicos(response.data);
-        });
-    }, []);
+    // A lógica de filtro por serviço específico seria adicionada na Cloud Function
+    const [servicoId, setServicoId] = useState('');
 
     const handleBuscarRelatorio = async () => {
         setLoading(true);
         setRelatorio(null);
         try {
-            const params = new URLSearchParams({
+            // ✅ Lógica refatorada para chamar uma Cloud Function
+            const functions = getFunctions();
+            const getFaturamento = httpsCallable(functions, 'getFaturamento');
+
+            const response: any = await getFaturamento({
                 data_inicio: dataInicio,
                 data_fim: dataFim,
+                servico_id: servicoId || null
             });
-            if (servicoId) {
-                params.append('servico_id', servicoId);
-            }
-            const response = await api.get<RelatorioFaturamento>(`/relatorios/faturamento?${params.toString()}`);
+
             setRelatorio(response.data);
         } catch (error) {
+            console.error("Erro ao buscar relatório de faturamento:", error);
             alert('Erro ao buscar relatório de faturamento.');
         } finally {
             setLoading(false);
@@ -64,7 +56,6 @@ export default function FaturamentoPage() {
             alert('Não há dados para exportar.');
             return;
         }
-
         const dadosFormatados = relatorio.detalhes.map(item => ({
             'Data e Hora': new Date(item.data_hora_inicio).toLocaleString('pt-BR'),
             'Cliente': item.cliente_nome,
@@ -72,7 +63,6 @@ export default function FaturamentoPage() {
             'Funcionário': item.funcionario_nome || 'Não associado',
             'Valor (R$)': parseFloat(item.servico_preco)
         }));
-
         const totalRow = { 'Cliente': 'TOTAL', 'Valor (R$)': relatorio.total };
         const worksheet = XLSX.utils.json_to_sheet(dadosFormatados);
         XLSX.utils.sheet_add_json(worksheet, [totalRow], { origin: -1, skipHeader: true });
@@ -95,15 +85,15 @@ export default function FaturamentoPage() {
                         <Input label="Data de Fim" type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
                     </div>
                     <div className="flex-grow">
-                        <label className="text-sm font-semibold text-texto-secundario block mb-2">Filtrar por Serviço</label>
-                        <select value={servicoId} onChange={e => setServicoId(e.target.value)} className="w-full px-4 py-3 bg-white border border-borda rounded-lg focus:ring-2 focus:ring-primaria-escuro focus:outline-none transition duration-200">
+                        <label className="text-sm font-semibold text-texto-secundario block mb-2">Filtrar por Serviço (Opcional)</label>
+                        <select value={servicoId} onChange={e => setServicoId(e.target.value)} className="w-full px-4 py-3 bg-white border border-borda rounded-lg">
                             <option value="">Todos os serviços</option>
-                            {servicos.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                            {/* A lista de serviços viria do Firestore */}
                         </select>
                     </div>
                     <div className="w-full md:w-auto">
                         <Button onClick={handleBuscarRelatorio} disabled={loading} className="w-full">
-                            {loading ? 'Buscando...' : 'Buscar'}
+                            {loading ? 'A buscar...' : 'Buscar'}
                         </Button>
                     </div>
                 </div>

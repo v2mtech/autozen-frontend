@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Link } from 'react-router-dom';
 import { FaBrain } from 'react-icons/fa';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const IconBrain = FaBrain as React.ElementType;
 
 interface HistoricoData {
     cliente: {
-        id: number;
+        id: string;
         nome: string;
         email: string;
         telefone: string;
@@ -41,10 +41,12 @@ export default function HistoricoVeiculoPage() {
         setHistorico(null);
         setSugestaoIA('');
         try {
-            const response = await api.get(`/veiculos/historico/${placa}`);
+            const functions = getFunctions();
+            const getHistoricoPorPlaca = httpsCallable(functions, 'getHistoricoPorPlaca');
+            const response: any = await getHistoricoPorPlaca({ placa });
             setHistorico(response.data);
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Nenhum histórico encontrado para esta placa.');
+            setError(err.message || 'Nenhum histórico encontrado para esta placa.');
         } finally {
             setLoading(false);
         }
@@ -55,9 +57,9 @@ export default function HistoricoVeiculoPage() {
         setLoadingIA(true);
         setSugestaoIA('');
         try {
-            const response = await api.post('/inteligencia/gerar-sugestao', {
-                usuario_id: historico.cliente.id
-            });
+            const functions = getFunctions();
+            const gerarSugestaoVenda = httpsCallable(functions, 'gerarSugestaoVenda');
+            const response: any = await gerarSugestaoVenda({ usuario_id: historico.cliente.id });
             setSugestaoIA(response.data.sugestao);
         } catch (error) {
             alert('Não foi possível gerar uma sugestão neste momento.');
@@ -121,24 +123,10 @@ export default function HistoricoVeiculoPage() {
                         <h3 className="text-xl font-semibold mb-4 text-texto-principal">Ordens de Serviço Realizadas</h3>
                         <div className="bg-fundo-secundario rounded-lg shadow-sm overflow-hidden border border-borda">
                             <table className="w-full text-left">
-                                <thead className="bg-fundo-principal border-b border-borda"><tr><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">OS #</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Data</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Itens</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Status</th></tr></thead>
+                                <thead className="bg-fundo-principal border-b border-borda"><tr><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">OS #</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Data</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Status</th></tr></thead>
                                 <tbody className="divide-y divide-borda">
                                     {historico.ordensServico.map(os => (
-                                        <tr key={os.id}><td className="p-3 text-primaria-padrao font-medium"><Link to={`/ordem-de-servico/${os.id}`} className="hover:underline">#{String(os.id).padStart(6, '0')}</Link></td><td className="p-3 text-texto-secundario">{new Date(os.data_hora_inicio).toLocaleDateString('pt-BR')}</td><td className="p-3 text-texto-secundario text-xs">{[os.servicos, os.produtos].filter(Boolean).join(', ')}</td><td className="p-3 text-texto-principal capitalize">{os.status}</td></tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="text-xl font-semibold mb-4 text-texto-principal">Orçamentos Realizados</h3>
-                        <div className="bg-fundo-secundario rounded-lg shadow-sm overflow-hidden border border-borda">
-                            <table className="w-full text-left">
-                                <thead className="bg-fundo-principal border-b border-borda"><tr><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Orçamento #</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Data</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Valor Total</th><th className="p-3 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Status</th></tr></thead>
-                                <tbody className="divide-y divide-borda">
-                                    {historico.orcamentos.map(orc => (
-                                        <tr key={orc.id}><td className="p-3 text-primaria-padrao font-medium"><Link to={`/orcamento/${orc.id}`} className="hover:underline">#{orc.id}</Link></td><td className="p-3 text-texto-secundario">{new Date(orc.data_orcamento).toLocaleDateString('pt-BR')}</td><td className="p-3 text-texto-principal font-mono">{Number(orc.valor_total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td className="p-3 text-texto-principal capitalize">{orc.status}</td></tr>
+                                        <tr key={os.id}><td className="p-3 text-primaria-padrao font-medium"><Link to={`/ordem-de-servico/${os.id}`} className="hover:underline">#{String(os.id).substring(0, 6)}</Link></td><td className="p-3 text-texto-secundario">{new Date(os.data_hora_inicio.toDate()).toLocaleDateString('pt-BR')}</td><td className="p-3 text-texto-principal capitalize">{os.status}</td></tr>
                                     ))}
                                 </tbody>
                             </table>

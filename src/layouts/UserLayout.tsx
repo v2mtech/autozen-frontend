@@ -14,8 +14,6 @@ const IconClipboardList = FaClipboardList as React.ElementType;
 const IconTicketAlt = FaTicketAlt as React.ElementType;
 const IconUserCircle = FaUserCircle as React.ElementType;
 const IconSignOutAlt = FaSignOutAlt as React.ElementType;
-const IconChevronLeft = FaChevronLeft as React.ElementType;
-const IconChevronRight = FaChevronRight as React.ElementType;
 const IconCalendarAlt = FaCalendarAlt as React.ElementType;
 const IconBars = FaBars as React.ElementType;
 
@@ -76,11 +74,6 @@ export default function UserLayout() {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
-    const handleLogout = () => {
-        logout();
-        window.location.href = '/login';
-    };
-
     const handleCategoryClick = (categoryTitle: string) => {
         if (isDrawerOpen && activeCategory === categoryTitle) {
             setIsDrawerOpen(false);
@@ -99,7 +92,7 @@ export default function UserLayout() {
     return (
         <div className="relative min-h-screen bg-fundo-principal text-texto-principal">
             <div className="flex">
-                <aside className="fixed top-0 left-0 h-full bg-fundo-secundario flex z-30">
+                <aside className="fixed top-0 left-0 h-full bg-fundo-secundario flex z-30 shadow-lg">
                     <div className="w-20 flex flex-col items-center py-4 border-r border-borda">
                         <button onClick={() => { setIsDrawerOpen(!isDrawerOpen); setActiveCategory(isDrawerOpen ? null : (activeCategory || navigationStructure[0].title)) }} className="p-2 mb-4 rounded-lg hover:bg-fundo-principal text-texto-secundario hover:text-primaria-padrao">
                             <IconBars size={24} />
@@ -113,9 +106,6 @@ export default function UserLayout() {
                                     title={category.title}
                                 >
                                     <category.icon size={22} />
-                                    <span className="absolute left-full ml-4 p-2 w-auto min-w-max rounded-md shadow-md text-texto-principal bg-fundo-principal text-xs font-bold transition-all opacity-0 group-hover:opacity-100">
-                                        {category.title}
-                                    </span>
                                 </button>
                             ))}
                         </nav>
@@ -127,11 +117,9 @@ export default function UserLayout() {
                     </div>
 
                     <div className={`h-full bg-fundo-secundario border-r border-borda flex flex-col transition-all duration-300 overflow-hidden ${isDrawerOpen ? 'w-64' : 'w-0'}`}>
-                        {/* ✅ INÍCIO DA CORREÇÃO: Substituição do H1 pelo IMG */}
-                        <div className="p-4 border-b border-borda">
+                        <div className="p-4 border-b border-borda h-[65px] flex items-center">
                             <img src="/assets/logo.png" alt="Vértice Auto Logo" className="w-32 h-auto" />
                         </div>
-                        {/* ✅ FIM DA CORREÇÃO */}
                         <div className="p-4">
                             <p className="text-sm font-bold truncate text-texto-principal">{userName}</p>
                             <p className="text-xs text-texto-secundario truncate">{userEmail}</p>
@@ -148,7 +136,7 @@ export default function UserLayout() {
                                                 <NavLink
                                                     to={link.path}
                                                     onClick={handleLinkClick}
-                                                    className={({ isActive }) => `flex items-center py-2 px-4 rounded-lg transition-colors text-sm font-semibold ${isActive ? 'bg-primaria-padrao text-white' : 'text-texto-secundario hover:bg-primaria-intermediario hover:text-white'}`}
+                                                    className={({ isActive }) => `flex items-center py-2 px-4 rounded-lg transition-colors text-sm font-semibold ${isActive ? 'bg-primaria-padrao text-white' : 'text-texto-secundario hover:bg-primaria-intermediario hover:text-texto-principal'}`}
                                                 >
                                                     <link.icon className="h-5 w-5 mr-3" />
                                                     <span>{link.label}</span>

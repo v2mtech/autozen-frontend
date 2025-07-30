@@ -1,17 +1,16 @@
 ﻿import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
-// Interface para os dados da avaliação
 interface Avaliacao {
-    id: number;
+    id: string;
     nota: number;
     comentario: string;
-    criado_em: string;
+    criado_em: { toDate: () => Date };
     usuario_nome: string;
 }
 
-// Componente auxiliar para as estrelas de avaliação
 const StarRating = ({ rating }: { rating: number }) => (
     <div className="flex items-center">
         {[1, 2, 3, 4, 5].map(star => (
@@ -29,10 +28,13 @@ export default function MinhasAvaliacoesPage() {
     useEffect(() => {
         const fetchAvaliacoes = async () => {
             if (!user) return;
-
+            setLoading(true);
             try {
-                const response = await api.get<Avaliacao[]>(`/empresas/${user.id}/avaliacoes`);
-                setAvaliacoes(response.data);
+                const avaliacoesRef = collection(db, 'avaliacoes');
+                const q = query(avaliacoesRef, where("empresa_id", "==", user.uid));
+                const querySnapshot = await getDocs(q);
+                const avlsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Avaliacao));
+                setAvaliacoes(avlsList);
             } catch (err) {
                 setError('Não foi possível carregar as avaliações.');
                 console.error(err);
@@ -71,14 +73,13 @@ export default function MinhasAvaliacoesPage() {
             <div className="space-y-4">
                 {avaliacoes.length > 0 ? avaliacoes.map(review => (
                     <div key={review.id} className="bg-fundo-secundario p-5 rounded-lg border border-borda">
-                        {/* ✅ CORREÇÃO APLICADA: Nome do cliente ao lado das estrelas */}
                         <div className="flex justify-between items-center mb-2">
                             <div className="flex items-center gap-3">
                                 <p className="font-bold text-texto-principal">{review.usuario_nome}</p>
                                 <StarRating rating={review.nota} />
                             </div>
                             <p className="text-xs text-texto-secundario">
-                                {new Date(review.criado_em).toLocaleDateString('pt-BR')}
+                                {review.criado_em.toDate().toLocaleDateString('pt-BR')}
                             </p>
                         </div>
                         {review.comentario ? (

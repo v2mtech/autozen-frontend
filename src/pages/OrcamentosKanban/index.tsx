@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import { Link } from 'react-router-dom';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
 import { Input } from '../../components/Input';
 import { FaWhatsapp } from 'react-icons/fa';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
 const WhatsappIcon = FaWhatsapp as React.ElementType;
 
 interface Orcamento {
-    id: number;
+    id: string;
     nome_cliente: string;
     descricao: string;
     status: 'solicitado' | 'em analise' | 'aguardando cliente' | 'aprovado' | 'cancelado' | 'devolvido';
@@ -18,7 +20,7 @@ interface Orcamento {
     cliente_telefone: string | null;
 }
 interface Cliente {
-    id: number;
+    id: string;
     nome: string;
 }
 
@@ -33,6 +35,7 @@ interface Columns {
 }
 
 export default function OrcamentosKanbanPage() {
+    const { user } = useAuth();
     const [columns, setColumns] = useState<Columns>({
         solicitados: { id: 'solicitados', title: 'Solicitações', items: [] },
         aguardando: { id: 'aguardando', title: 'Aguardando Cliente', items: [] },
@@ -45,8 +48,12 @@ export default function OrcamentosKanbanPage() {
     const [loading, setLoading] = useState(true);
 
     const fetchOrcamentos = async () => {
+        if (!user) return;
         try {
-            const response = await api.get<Orcamento[]>('/orcamentos/empresa');
+            const orcamentosRef = collection(db, 'orcamentos');
+            const q = query(orcamentosRef, where("empresa_id", "==", user.uid));
+            const snap = await getDocs(q);
+            const orcamentosList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Orcamento));
 
             const newColumns: Columns = {
                 solicitados: { id: 'solicitados', title: 'Solicitações', items: [] },
@@ -55,10 +62,8 @@ export default function OrcamentosKanbanPage() {
                 cancelados: { id: 'cancelados', title: 'Cancelados', items: [] },
             };
 
-            response.data.forEach(orcamento => {
-                if (orcamento.status === 'devolvido') {
-                    newColumns.solicitados.items.push(orcamento);
-                } else if (orcamento.status === 'solicitado' || orcamento.status === 'em analise') {
+            orcamentosList.forEach(orcamento => {
+                if (orcamento.status === 'devolvido' || orcamento.status === 'solicitado' || orcamento.status === 'em analise') {
                     newColumns.solicitados.items.push(orcamento);
                 } else if (orcamento.status === 'aguardando cliente') {
                     newColumns.aguardando.items.push(orcamento);
@@ -77,11 +82,12 @@ export default function OrcamentosKanbanPage() {
     };
 
     const fetchClientes = async () => {
+        if (!user) return;
         try {
-            const response = await api.get('/usuarios/list');
-            setClientes(response.data);
+            const clientesRef = collection(db, 'usuarios');
+            const snap = await getDocs(clientesRef);
+            setClientes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente)));
         } catch (error) {
-            console.error("Erro ao buscar clientes", error);
             alert("Não foi possível carregar a lista de clientes.");
         }
     };
@@ -91,7 +97,7 @@ export default function OrcamentosKanbanPage() {
         Promise.all([fetchOrcamentos(), fetchClientes()]).then(() => {
             setLoading(false);
         });
-    }, []);
+    }, [user]);
 
     const handleOpenModal = () => setIsModalOpen(true);
     const handleCloseModal = () => {
@@ -100,12 +106,20 @@ export default function OrcamentosKanbanPage() {
     };
 
     const handleSaveOrcamento = async () => {
-        if (!currentOrcamento.usuario_id) {
+        if (!user || !currentOrcamento.usuario_id) {
             alert("Por favor, selecione um cliente.");
             return;
         }
         try {
-            await api.post('/orcamentos/empresa', currentOrcamento);
+            const clienteSelecionado = clientes.find(c => c.id === currentOrcamento.usuario_id);
+            const dataToSend = {
+                ...currentOrcamento,
+                empresa_id: user.uid,
+                nome_cliente: clienteSelecionado?.nome,
+                status: 'aguardando cliente',
+                data_orcamento: new Date(),
+            };
+            await addDoc(collection(db, 'orcamentos'), dataToSend);
             handleCloseModal();
             fetchOrcamentos();
         } catch (error) {
@@ -113,21 +127,7 @@ export default function OrcamentosKanbanPage() {
         }
     };
 
-    const handleWhatsAppClick = (event: React.MouseEvent, telefone: string | null, clienteNome: string) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!telefone) {
-            alert('Este cliente não tem um número de telefone registado.');
-            return;
-        }
-        const numeroLimpo = telefone.replace(/\D/g, '');
-        const mensagem = encodeURIComponent(`Olá ${clienteNome}, temos novidades sobre o seu orçamento.`);
-        window.open(`https://wa.me/55${numeroLimpo}?text=${mensagem}`, '_blank');
-    };
-
-    const handleOnDragEnd = (result: DropResult) => {
-        console.log('Drag ended:', result);
-    };
+    const handleOnDragEnd = (result: DropResult) => { console.log('Drag ended:', result); };
 
     if (loading) return <p className="text-center text-texto-secundario">A carregar o quadro de orçamentos...</p>;
 
@@ -146,23 +146,13 @@ export default function OrcamentosKanbanPage() {
                                     <h2 className="text-lg font-semibold text-texto-principal mb-4">{column.title} ({column.items.length})</h2>
                                     <div className="space-y-3 min-h-[400px]">
                                         {column.items.map((item, index) => (
-                                            <Draggable key={item.id.toString()} draggableId={item.id.toString()} index={index}>
+                                            <Draggable key={item.id} draggableId={item.id} index={index}>
                                                 {(provided) => (
                                                     <Link to={`/orcamento/${item.id}`} className="relative block">
                                                         {item.status === 'devolvido' && (
-                                                            <span className="absolute -top-2 -right-2 flex h-5 w-5">
-                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                                                                <span className="relative inline-flex rounded-full h-5 w-5 bg-yellow-500 justify-center items-center text-white text-xs">!</span>
-                                                            </span>
+                                                            <span className="absolute -top-2 -right-2 flex h-5 w-5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span><span className="relative inline-flex rounded-full h-5 w-5 bg-yellow-500 justify-center items-center text-white text-xs">!</span></span>
                                                         )}
                                                         <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className={`p-4 rounded-md shadow-sm bg-white border-l-4 ${item.status === 'devolvido' ? 'border-yellow-500' : 'border-primaria-padrao'} hover:scale-105 transition-transform`}>
-                                                            <button
-                                                                onClick={(e) => handleWhatsAppClick(e, item.cliente_telefone, item.nome_cliente)}
-                                                                className="absolute top-2 right-2 text-green-500 hover:text-green-400 z-10 p-1 rounded-full hover:bg-gray-100"
-                                                                title="Contactar via WhatsApp"
-                                                            >
-                                                                <WhatsappIcon size={24} />
-                                                            </button>
                                                             <p className="font-bold text-texto-principal pr-8">{item.nome_cliente}</p>
                                                             <p className="text-sm text-texto-secundario truncate">{item.descricao}</p>
                                                             <p className="text-right mt-2 font-bold text-lg text-primaria-escuro">{Number(item.valor_total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
@@ -194,7 +184,7 @@ export default function OrcamentosKanbanPage() {
                     </div>
                     <Input label="Valor Total (R$)" name="valor_total" type="number" step="0.01" onChange={e => setCurrentOrcamento({ ...currentOrcamento, valor_total: e.target.value })} />
                 </div>
-                <div className="flex justify-end gap-4 pt-4 mt-4 border-t">
+                <div className="flex justify-end gap-4 pt-4 mt-4 border-t border-borda">
                     <Button onClick={handleCloseModal} variant="secondary">Cancelar</Button>
                     <Button onClick={handleSaveOrcamento} variant="primary">Enviar para Cliente</Button>
                 </div>

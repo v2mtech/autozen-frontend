@@ -1,25 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Modal } from '../../components/Modal';
 import { cstIcms, cstPisCofins, cstIpi, cfopCodes } from '../../data/fiscalData';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs, doc, addDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
+import api from '../../services/api'; // Mantido para a busca de NCM na API externa
 
 interface RegraFiscal {
-    id: number;
+    id: string;
     nome_regra: string;
     cfop?: string;
     ncm_codigo: string;
     ncm_descricao: string;
-    cest?: string;
-    icms_cst?: string;
-    icms_aliquota?: number;
-    pis_cst?: string;
-    pis_aliquota?: number;
-    cofins_cst?: string;
-    cofins_aliquota?: number;
-    ipi_cst?: string;
-    ipi_aliquota?: number;
 }
 
 interface NcmResult {
@@ -28,6 +22,7 @@ interface NcmResult {
 }
 
 export default function RegrasFiscaisPage() {
+    const { user } = useAuth();
     const [regras, setRegras] = useState<RegraFiscal[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRegra, setCurrentRegra] = useState<Partial<RegraFiscal>>({});
@@ -39,10 +34,13 @@ export default function RegrasFiscaisPage() {
     const [isNcmLoading, setIsNcmLoading] = useState(false);
 
     const fetchRegras = async () => {
+        if (!user) return;
         setLoading(true);
         try {
-            const response = await api.get('/regras-fiscais');
-            setRegras(response.data);
+            const regrasRef = collection(db, 'regras_fiscais');
+            const q = query(regrasRef, where("empresa_id", "==", user.uid));
+            const snap = await getDocs(q);
+            setRegras(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RegraFiscal)));
         } catch (error) {
             alert('Erro ao carregar as regras fiscais.');
         } finally {
@@ -52,7 +50,7 @@ export default function RegrasFiscaisPage() {
 
     useEffect(() => {
         fetchRegras();
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         if (ncmSearch.length < 2) {
@@ -66,10 +64,9 @@ export default function RegrasFiscaisPage() {
                 .catch(err => console.error(err))
                 .finally(() => setIsNcmLoading(false));
         }, 500);
-
         return () => clearTimeout(delayDebounce);
     }, [ncmSearch]);
-    
+
     const handleSelectNcm = (ncm: NcmResult) => {
         setCurrentRegra({
             ...currentRegra,
@@ -79,10 +76,10 @@ export default function RegrasFiscaisPage() {
         setNcmSearch('');
         setNcmResults([]);
     };
-    
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setCurrentRegra(prev => ({...prev, [name]: value}));
+        setCurrentRegra(prev => ({ ...prev, [name]: value }));
     };
 
     const handleOpenModal = (regra?: RegraFiscal) => {
@@ -97,12 +94,14 @@ export default function RegrasFiscaisPage() {
     };
 
     const handleSave = async () => {
+        if (!user) return;
         const { id, ...data } = currentRegra;
+        const dataToSave = { ...data, empresa_id: user.uid };
         try {
-            if (isEditing) {
-                await api.put(`/regras-fiscais/${id}`, data);
+            if (isEditing && id) {
+                await updateDoc(doc(db, 'regras_fiscais', id), dataToSave);
             } else {
-                await api.post('/regras-fiscais', data);
+                await addDoc(collection(db, 'regras_fiscais'), dataToSave);
             }
             fetchRegras();
             setIsModalOpen(false);
@@ -118,23 +117,21 @@ export default function RegrasFiscaisPage() {
                 <Button onClick={() => handleOpenModal()} className="w-auto">Adicionar Regra</Button>
             </div>
 
-            <div className="bg-fundo-secundario rounded-lg shadow-md border border-borda">
+            <div className="bg-fundo-secundario rounded-lg shadow-sm border border-borda overflow-hidden">
                 <table className="w-full text-left">
-                     <thead className="border-b border-borda">
+                    <thead className="border-b border-borda bg-fundo-principal">
                         <tr>
-                            <th className="p-4 text-texto-secundario">Nome da Regra</th>
-                            <th className="p-4 text-texto-secundario">CFOP</th>
-                            <th className="p-4 text-texto-secundario">NCM</th>
-                            <th className="p-4 text-texto-secundario">ICMS (%)</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Nome da Regra</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">CFOP</th>
+                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">NCM</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-borda">
                         {regras.map(regra => (
-                            <tr key={regra.id} onClick={() => handleOpenModal(regra)} className="border-b border-borda last:border-b-0 hover:bg-gray-100 cursor-pointer">
+                            <tr key={regra.id} onClick={() => handleOpenModal(regra)} className="cursor-pointer hover:bg-fundo-principal">
                                 <td className="p-4 font-semibold text-texto-principal">{regra.nome_regra}</td>
-                                <td className="p-4 text-texto-principal">{regra.cfop || '-'}</td>
-                                <td className="p-4 text-texto-principal">{regra.ncm_codigo}</td>
-                                <td className="p-4 text-texto-principal">{Number(regra.icms_aliquota || 0).toFixed(2)}</td>
+                                <td className="p-4 text-texto-secundario">{regra.cfop || '-'}</td>
+                                <td className="p-4 text-texto-secundario">{regra.ncm_codigo}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -143,25 +140,23 @@ export default function RegrasFiscaisPage() {
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditing ? 'Editar Regra Fiscal' : 'Nova Regra Fiscal'} maxWidthClass="max-w-4xl">
                 <div className="space-y-6">
-                    <fieldset className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border-t pt-4">
-                        <legend className="text-lg font-semibold px-2">Dados da Regra</legend>
+                    <fieldset className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-borda pt-4">
+                        <legend className="text-lg font-semibold px-2 text-texto-principal">Dados da Regra</legend>
                         <Input label="Nome da Regra" name="nome_regra" value={currentRegra.nome_regra || ''} onChange={handleChange} required />
-                        
                         <div>
                             <label className="text-sm font-semibold text-texto-secundario block mb-2">CFOP</label>
                             <select name="cfop" value={currentRegra.cfop || ''} onChange={handleChange} className="w-full px-4 py-3 bg-white border border-borda rounded-lg">
                                 <option value="">Selecione...</option>
                                 {cfopCodes.map(cfop => <option key={cfop.codigo} value={cfop.codigo}>{cfop.codigo} - {cfop.descricao}</option>)}
                             </select>
-                         </div>
-
+                        </div>
                         <div className="relative">
                             <Input label="Pesquisar NCM (mín. 2 caracteres)" value={ncmSearch} onChange={e => setNcmSearch(e.target.value)} />
                             {isNcmLoading && <span className="text-xs absolute right-2 top-10">A procurar...</span>}
                             {ncmResults.length > 0 && (
                                 <ul className="absolute z-10 w-full bg-white border border-borda rounded-md mt-1 max-h-60 overflow-y-auto shadow-lg">
                                     {ncmResults.map(ncm => (
-                                        <li key={ncm.codigo} onClick={() => handleSelectNcm(ncm)} className="p-2 hover:bg-gray-100 cursor-pointer text-sm">
+                                        <li key={ncm.codigo} onClick={() => handleSelectNcm(ncm)} className="p-2 hover:bg-gray-100 cursor-pointer text-sm text-texto-principal">
                                             <strong>{ncm.codigo}</strong> - {ncm.descricao}
                                         </li>
                                     ))}
@@ -170,46 +165,6 @@ export default function RegrasFiscaisPage() {
                         </div>
                         <Input label="Código NCM" name="ncm_codigo" value={currentRegra.ncm_codigo || ''} readOnly disabled />
                         <Input label="Descrição NCM" name="ncm_descricao" value={currentRegra.ncm_descricao || ''} readOnly disabled className="lg:col-span-2" />
-                    </fieldset>
-                    
-                    <fieldset className="grid grid-cols-2 md:grid-cols-4 gap-4 border-t pt-4">
-                         <legend className="text-lg font-semibold px-2 col-span-full">Impostos</legend>
-                         
-                         <div>
-                            <label className="text-sm font-semibold text-texto-secundario block mb-2">ICMS CST</label>
-                            <select name="icms_cst" value={currentRegra.icms_cst || ''} onChange={handleChange} className="w-full px-4 py-3 bg-white border border-borda rounded-lg">
-                                <option value="">Selecione...</option>
-                                {cstIcms.map(cst => <option key={cst.codigo} value={cst.codigo}>{cst.codigo} - {cst.descricao}</option>)}
-                            </select>
-                         </div>
-                         <Input label="ICMS Alíquota (%)" name="icms_aliquota" type="number" step="0.01" value={currentRegra.icms_aliquota || ''} onChange={handleChange} />
-                         
-                         <div>
-                            <label className="text-sm font-semibold text-texto-secundario block mb-2">PIS CST</label>
-                            <select name="pis_cst" value={currentRegra.pis_cst || ''} onChange={handleChange} className="w-full px-4 py-3 bg-white border border-borda rounded-lg">
-                                <option value="">Selecione...</option>
-                                {cstPisCofins.map(cst => <option key={cst.codigo} value={cst.codigo}>{cst.codigo} - {cst.descricao}</option>)}
-                            </select>
-                         </div>
-                         <Input label="PIS Alíquota (%)" name="pis_aliquota" type="number" step="0.01" value={currentRegra.pis_aliquota || ''} onChange={handleChange} />
-                         
-                         <div>
-                            <label className="text-sm font-semibold text-texto-secundario block mb-2">COFINS CST</label>
-                            <select name="cofins_cst" value={currentRegra.cofins_cst || ''} onChange={handleChange} className="w-full px-4 py-3 bg-white border border-borda rounded-lg">
-                                <option value="">Selecione...</option>
-                                {cstPisCofins.map(cst => <option key={cst.codigo} value={cst.codigo}>{cst.codigo} - {cst.descricao}</option>)}
-                            </select>
-                         </div>
-                         <Input label="COFINS Alíquota (%)" name="cofins_aliquota" type="number" step="0.01" value={currentRegra.cofins_aliquota || ''} onChange={handleChange} />
-                         
-                         <div>
-                            <label className="text-sm font-semibold text-texto-secundario block mb-2">IPI CST</label>
-                            <select name="ipi_cst" value={currentRegra.ipi_cst || ''} onChange={handleChange} className="w-full px-4 py-3 bg-white border border-borda rounded-lg">
-                                <option value="">Selecione...</option>
-                                {cstIpi.map(cst => <option key={cst.codigo} value={cst.codigo}>{cst.codigo} - {cst.descricao}</option>)}
-                            </select>
-                         </div>
-                         <Input label="IPI Alíquota (%)" name="ipi_aliquota" type="number" step="0.01" value={currentRegra.ipi_aliquota || ''} onChange={handleChange} />
                     </fieldset>
                 </div>
                 <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-borda">

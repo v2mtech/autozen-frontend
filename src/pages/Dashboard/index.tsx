@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import api from '../../services/api';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend, PointElement, LineElement, DoughnutController, Filler } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import * as XLSX from 'xlsx';
 import { FaSearch } from 'react-icons/fa';
+
+// ✅ Funções do Firebase para chamar a Cloud Function
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const SearchIcon = FaSearch as React.ElementType;
 
@@ -72,14 +74,18 @@ export default function DashboardPage() {
         setLoading(true);
         setError(null);
         try {
-            const response = await api.get(`/relatorios/dashboard-analytics`, { params: { data_inicio: dataInicio, data_fim: dataFim } });
+            // ✅ Lógica refatorada para chamar uma Cloud Function
+            const functions = getFunctions();
+            const getDashboardAnalytics = httpsCallable(functions, 'getDashboardAnalytics');
+            const response: any = await getDashboardAnalytics({ data_inicio: dataInicio, data_fim: dataFim });
+
             if (response.data) {
                 setAnalyticsData(response.data);
             } else {
-                throw new Error("A resposta da API não continha dados.");
+                throw new Error("A resposta da Cloud Function não continha dados.");
             }
         } catch (err) {
-            console.error("Erro ao buscar dados do dashboard:", err);
+            console.error("Erro ao buscar dados do dashboard via Cloud Function:", err);
             setError('Não foi possível carregar os dados do dashboard. Verifique a sua ligação ou tente mais tarde.');
         } finally {
             setLoading(false);
@@ -110,20 +116,18 @@ export default function DashboardPage() {
         datasets: [{ label: 'Quantidade', data: Array.isArray(analyticsData.topServicos) ? analyticsData.topServicos.map(s => s.quantidade) : [], backgroundColor: chartColors }],
     };
 
-    // ✅ OPÇÕES PARA O GRÁFICO DE BARRAS HORIZONTAL
     const horizontalBarOptions = {
-        indexAxis: 'y' as const, // Define o eixo principal como Y (horizontal)
+        indexAxis: 'y' as const,
         responsive: true,
         plugins: {
             legend: {
-                display: false, // Esconde a legenda, pois as cores são decorativas
+                display: false,
             },
             title: {
                 display: false,
             },
         },
     };
-
 
     if (loading) {
         return <p className="text-center text-texto-secundario p-10">A carregar dados do Dashboard...</p>;
@@ -160,7 +164,6 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </div>
-
             <div className="bg-fundo-secundario p-6 rounded-lg shadow text-center mb-8 border border-borda">
                 <p className="text-texto-secundario text-sm font-medium">Faturamento Total no Período</p>
                 <p className="text-4xl font-bold text-green-600">{Number(analyticsData.faturamentoTotal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
@@ -184,7 +187,6 @@ export default function DashboardPage() {
                 <div className="bg-fundo-secundario p-6 rounded-lg shadow relative border border-borda">
                     <ChartMenu onExportXLSX={() => exportToXLSX(analyticsData.topServicos || [], 'top_5_servicos')} />
                     <h2 className="text-xl font-bold text-texto-principal mb-4">Top 5 Serviços Mais Realizados</h2>
-                    {/* ✅ GRÁFICO ALTERADO DE <Doughnut> PARA <Bar> COM OPÇÕES HORIZONTAIS */}
                     <Bar options={horizontalBarOptions} data={topServicosData} />
                 </div>
             </div>

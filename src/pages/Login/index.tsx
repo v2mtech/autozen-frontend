@@ -7,18 +7,13 @@ const UserIcon = FaUser as React.ElementType;
 
 export default function LoginPage() {
   return (
-    // ✅ CORREÇÃO: Padding superior (pt) foi reduzido de p-8 para pt-6 para diminuir o espaço no topo.
     <div className="w-full max-w-md mx-auto bg-auth-card rounded-2xl shadow-xl px-8 pt-6 pb-8 animate-fade-in-up">
       <div className="text-center">
-
         <img src="/assets/logo.png"
           alt="Vértice Auto Logo"
-          // ✅ CORREÇÃO: className reativada e margem inferior (mb) ajustada para controlar o espaço abaixo.
           className="w-56 h-auto mx-auto mb-4"
         />
-
         <h1 className="text-2xl font-bold text-auth-text-dark mb-2"></h1>
-
         <p className="text-auth-text-light text-md mb-8">Selecione o seu tipo de acesso para começar.</p>
         <div className="space-y-4">
           <Link

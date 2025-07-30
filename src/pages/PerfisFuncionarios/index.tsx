@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Modal } from '../../components/Modal';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs, doc, addDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
 // Lista de todas as permissões possíveis no sistema
 const todasAsPermissoes = {
@@ -30,12 +32,13 @@ const todasAsPermissoes = {
 };
 
 interface Perfil {
-    id: number;
+    id: string;
     nome: string;
     permissoes: string[];
 }
 
 export default function PerfisFuncionariosPage() {
+    const { user } = useAuth();
     const [perfis, setPerfis] = useState<Perfil[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentPerfil, setCurrentPerfil] = useState<Partial<Perfil>>({});
@@ -43,14 +46,13 @@ export default function PerfisFuncionariosPage() {
     const [loading, setLoading] = useState(true);
 
     const fetchData = async () => {
+        if (!user) return;
         setLoading(true);
         try {
-            const response = await api.get('/perfis-funcionarios');
-            const perfisData = response.data.map((p: any) => ({
-                ...p,
-                permissoes: typeof p.permissoes === 'string' ? JSON.parse(p.permissoes) : p.permissoes || []
-            }));
-            setPerfis(perfisData);
+            const perfisRef = collection(db, 'perfis_funcionarios');
+            const q = query(perfisRef, where("empresa_id", "==", user.uid));
+            const snap = await getDocs(q);
+            setPerfis(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Perfil)));
         } catch (error) {
             alert('Erro ao carregar perfis.');
         } finally {
@@ -60,7 +62,7 @@ export default function PerfisFuncionariosPage() {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [user]);
 
     const handleOpenModal = (perfil?: Perfil) => {
         if (perfil) {
@@ -85,17 +87,19 @@ export default function PerfisFuncionariosPage() {
     };
 
     const handleSave = async () => {
+        if (!user) return;
         const { id, ...data } = currentPerfil;
         if (!data.nome) {
             alert("O nome do perfil é obrigatório.");
             return;
         }
+        const dataToSave = { ...data, empresa_id: user.uid };
 
         try {
-            if (isEditing) {
-                await api.put(`/perfis-funcionarios/${id}`, data);
+            if (isEditing && id) {
+                await updateDoc(doc(db, 'perfis_funcionarios', id), dataToSave);
             } else {
-                await api.post('/perfis-funcionarios', data);
+                await addDoc(collection(db, 'perfis_funcionarios'), dataToSave);
             }
             fetchData();
             setIsModalOpen(false);
@@ -109,13 +113,13 @@ export default function PerfisFuncionariosPage() {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-4xl font-bold">Perfis de Funcionário</h1>
+                <h1 className="text-4xl font-bold text-texto-principal">Perfis de Funcionário</h1>
                 <Button onClick={() => handleOpenModal()} className="w-auto">Adicionar Perfil</Button>
             </div>
 
-            <div className="bg-fundo-secundario rounded-lg shadow-md p-4 border border-borda">
+            <div className="bg-fundo-secundario rounded-lg shadow-sm p-4 border border-borda">
                 {perfis.map(perfil => (
-                    <div key={perfil.id} onClick={() => handleOpenModal(perfil)} className="p-3 border-b border-borda last:border-b-0 cursor-pointer hover:bg-gray-100">
+                    <div key={perfil.id} onClick={() => handleOpenModal(perfil)} className="p-3 border-b border-borda last:border-b-0 cursor-pointer hover:bg-fundo-principal">
                         <p className="font-bold text-texto-principal">{perfil.nome}</p>
                         <p className="text-sm text-texto-secundario">{perfil.permissoes.length} permissões</p>
                     </div>
@@ -126,14 +130,14 @@ export default function PerfisFuncionariosPage() {
                 <div className="space-y-6">
                     <Input label="Nome do Perfil" name="nome" value={currentPerfil.nome || ''} onChange={e => setCurrentPerfil(prev => ({ ...prev, nome: e.target.value }))} />
                     <div>
-                        <h3 className="text-lg font-semibold text-white mb-2">Permissões de Acesso</h3>
+                        <h3 className="text-lg font-semibold text-texto-principal mb-2">Permissões de Acesso</h3>
                         <div className="space-y-4">
                             {Object.entries(todasAsPermissoes).map(([categoria, permissoes]) => (
                                 <div key={categoria}>
                                     <h4 className="font-bold capitalize text-texto-principal border-b border-borda pb-1 mb-2">{categoria}</h4>
                                     <div className="grid grid-cols-2 gap-2">
                                         {permissoes.map(p => (
-                                            <label key={p.id} className="flex items-center space-x-2">
+                                            <label key={p.id} className="flex items-center space-x-2 text-texto-principal">
                                                 <input
                                                     type="checkbox"
                                                     checked={currentPerfil.permissoes?.includes(p.id)}

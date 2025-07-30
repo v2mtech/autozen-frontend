@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Pie } from 'react-chartjs-2';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface CurvaABCItem {
     nome: string;
-    quantidade_vendida: number;
     valor_total: number;
-    participacao: string;
-    acumulado: string;
     classe: 'A' | 'B' | 'C';
+    participacao: string;
 }
 
 const getISODate = (date: Date) => date.toISOString().split('T')[0];
@@ -26,8 +24,9 @@ export default function CurvaABCPage() {
     const fetchRelatorio = useCallback(async () => {
         setLoading(true);
         try {
-            const params = { data_inicio: dataInicio, data_fim: dataFim };
-            const response = await api.get('/relatorios/curva-abc', { params });
+            const functions = getFunctions();
+            const getCurvaABC = httpsCallable(functions, 'getCurvaABC');
+            const response: any = await getCurvaABC({ data_inicio: dataInicio, data_fim: dataFim });
             setRelatorio(response.data);
         } catch (error) {
             alert('Erro ao buscar relatório de Curva ABC.');
@@ -48,7 +47,7 @@ export default function CurvaABCPage() {
                 relatorio.filter(p => p.classe === 'B').reduce((acc, p) => acc + parseFloat(p.valor_total.toString()), 0),
                 relatorio.filter(p => p.classe === 'C').reduce((acc, p) => acc + parseFloat(p.valor_total.toString()), 0),
             ],
-            backgroundColor: ['#420b58', '#f1a20b', '#08807b'], // Paleta de cores do gráfico
+            backgroundColor: ['#420b58', '#f1a20b', '#08807b'],
         }],
     };
 

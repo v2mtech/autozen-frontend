@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+// ✅ 1. Importar o hook useNavigate
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/Button';
 import {
     FaTachometerAlt, FaClipboardList, FaFileSignature, FaCalendarAlt, FaBoxOpen, FaCogs,
     FaTags, FaWarehouse, FaExchangeAlt, FaTruck, FaChartPie, FaUserTie, FaPercentage,
     FaChartLine, FaFileInvoiceDollar, FaMoneyBillWave, FaFileAlt, FaGift, FaBalanceScale,
-    FaFileInvoice, FaUsers, FaStar, FaVideo, FaBuilding, FaChevronLeft, FaChevronRight,
-    FaSignOutAlt, FaBars, FaBrain,
-    FaHistory,
-    FaKey,
-    FaQuestionCircle
+    FaFileInvoice, FaUsers, FaStar, FaVideo, FaBuilding, FaSignOutAlt, FaBars, FaBrain,
+    FaHistory, FaKey, FaQuestionCircle, FaFileUpload
 } from 'react-icons/fa';
 
 // --- Tipagem dos Ícones ---
@@ -38,17 +36,16 @@ const IconUsers = FaUsers as React.ElementType;
 const IconStar = FaStar as React.ElementType;
 const IconVideo = FaVideo as React.ElementType;
 const IconBuilding = FaBuilding as React.ElementType;
-const IconChevronLeft = FaChevronLeft as React.ElementType;
-const IconChevronRight = FaChevronRight as React.ElementType;
 const IconSignOutAlt = FaSignOutAlt as React.ElementType;
 const IconBars = FaBars as React.ElementType;
 const IconBrain = FaBrain as React.ElementType;
 const IconHistory = FaHistory as React.ElementType;
 const IconKey = FaKey as React.ElementType;
 const IconQuestionCircle = FaQuestionCircle as React.ElementType;
+const IconFileUpload = FaFileUpload as React.ElementType;
 
 interface Empresa {
-    id: number;
+    id: string;
     nome_empresa: string;
     email: string;
 }
@@ -78,30 +75,13 @@ const navigationStructure: NavCategory[] = [
         ]
     },
     {
-        title: 'SERVIÇOS', icon: IconCogs,
-        links: [
-            { path: '/grupos-servicos', label: 'Grupos de Serviços', icon: IconCogs, permission: 'gerir_servicos' },
-            { path: '/servicos', label: 'Serviços', icon: IconBoxOpen, permission: 'gerir_servicos' },
-        ]
-    },
-    {
         title: 'PRODUTOS E ESTOQUE', icon: IconWarehouse,
         links: [
-            { path: '/grupos', label: 'Grupos de Produtos', icon: IconCogs, permission: 'gerir_produtos' },
             { path: '/produtos', label: 'Produtos', icon: IconTags, permission: 'gerir_produtos' },
+            { path: '/entrada-nota', label: 'Entrada por XML', icon: IconFileUpload, permission: 'gerir_produtos' },
             { path: '/estoque', label: 'Estoque', icon: IconWarehouse, permission: 'gerir_produtos' },
             { path: '/fechamento-estoque', label: 'Fechamento de Estoque', icon: IconExchangeAlt, permission: 'gerir_produtos' },
             { path: '/fornecedores', label: 'Fornecedores', icon: IconTruck, permission: 'gerir_fornecedores' },
-            { path: '/posicao-estoque', label: 'Posição do Estoque', icon: IconChartPie, permission: 'ver_relatorios_financeiros' },
-        ]
-    },
-    {
-        title: 'FUNCIONARIOS', icon: IconUserTie,
-        links: [
-            { path: '/funcionarios', label: 'Funcionários', icon: IconUserTie, permission: 'gerir_funcionarios' },
-            { path: '/gestao-comissoes', label: 'Gestão de Comissões', icon: IconPercentage, permission: 'gerir_comissoes' },
-            { path: '/relatorio-comissoes', label: 'Relatório de Comissões', icon: IconChartLine, permission: 'ver_relatorios_financeiros' },
-            { path: '/perfis-funcionarios', label: 'Perfis de Acesso', icon: IconKey, permission: 'gerir_funcionarios' }
         ]
     },
     {
@@ -111,35 +91,14 @@ const navigationStructure: NavCategory[] = [
             { path: '/dre', label: 'DRE (Resultado)', icon: IconBalanceScale, permission: 'ver_relatorios_financeiros' },
             { path: '/contas-a-pagar', label: 'Contas a Pagar', icon: IconMoneyBillWave, permission: 'gerir_contas' },
             { path: '/contas-a-receber', label: 'Contas a Receber', icon: IconMoneyBillWave, permission: 'gerir_contas' },
-            { path: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: IconChartPie, permission: 'ver_relatorios_financeiros' },
-            { path: '/formas-pagamento', label: 'Formas de Pagamento', icon: IconMoneyBillWave, permission: 'gerir_contas' },
-            { path: '/condicoes-pagamento', label: 'Condições de Pagamento', icon: IconFileAlt, permission: 'gerir_contas' },
-            { path: '/cashback', label: 'Cashback', icon: IconGift, permission: 'gerir_servicos' },
-            { path: '/curva-abc', label: 'Curva ABC', icon: IconChartPie, permission: 'ver_relatorios_financeiros' },
-            { path: '/auditoria-estoque', label: 'Auditoria de Estoque', icon: IconFileAlt, permission: 'ver_relatorios_financeiros' },
-        ]
-    },
-    {
-        title: 'FISCAL', icon: IconBalanceScale,
-        links: [
-            { path: '/regras-fiscais', label: 'Regras Fiscais', icon: IconBalanceScale, permission: 'gerir_regras_fiscais' },
-            { path: '/notas-fiscais', label: 'Notas Emitidas', icon: IconFileInvoice, permission: 'emitir_notas_fiscais' },
-        ]
-    },
-    {
-        title: 'RELACIONAMENTO', icon: IconUsers,
-        links: [
-            { path: '/mailing', label: 'Mailing de Clientes', icon: IconUsers, permission: 'ver_dashboard' },
-            { path: '/avaliacoes', label: 'Avaliações', icon: IconStar, permission: 'ver_dashboard' },
-            { path: '/marketing-ia', label: 'Marketing com IA', icon: IconBrain, permission: 'ver_dashboard' },
-            { path: '/historico-veiculo', label: 'Histórico por Placa', icon: IconHistory, permission: 'ver_dashboard' },
         ]
     },
     {
         title: 'CONFIGURAÇÕES', icon: IconCogs,
         links: [
-            { path: '/gerenciar-videos', label: 'Gerir Vídeos', icon: IconVideo, permission: 'gerir_servicos' },
-            { path: '/editar-empresa', label: 'Editar Perfil da Loja', icon: IconBuilding, permission: 'gerir_servicos' },
+            { path: '/editar-empresa', label: 'Perfil da Loja', icon: IconBuilding, permission: 'gerir_funcionarios' },
+            { path: '/funcionarios', label: 'Funcionários', icon: IconUserTie, permission: 'gerir_funcionarios' },
+            { path: '/perfis-funcionarios', label: 'Perfis de Acesso', icon: IconKey, permission: 'gerir_funcionarios' },
             { path: '/manuais', label: 'Manual do Sistema', icon: IconQuestionCircle }
         ]
     }
@@ -147,9 +106,12 @@ const navigationStructure: NavCategory[] = [
 
 export default function DashboardLayout() {
     const { user, logout, permissoes } = useAuth();
-    const empresaLogada = user as Empresa;
+    const empresaLogada = user as unknown as Empresa;
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+    // ✅ 2. Criar a função navigate a partir do hook
+    const navigate = useNavigate();
 
     const hasPermission = (permission?: string) => {
         if (!permission) return true;
@@ -159,7 +121,8 @@ export default function DashboardLayout() {
 
     const handleLogout = () => {
         logout();
-        window.location.href = '/login';
+        // ✅ 3. Agora o 'navigate' existe e funciona
+        navigate('/login');
     };
 
     const handleCategoryClick = (categoryTitle: string) => {
@@ -180,7 +143,7 @@ export default function DashboardLayout() {
     return (
         <div className="relative min-h-screen bg-fundo-principal text-texto-principal">
             <div className="flex">
-                <aside className="fixed top-0 left-0 h-full bg-fundo-secundario flex z-30">
+                <aside className="fixed top-0 left-0 h-full bg-fundo-secundario flex z-30 shadow-lg">
                     <div className="w-20 flex flex-col items-center py-4 border-r border-borda">
                         <button onClick={() => { setIsDrawerOpen(!isDrawerOpen); setActiveCategory(isDrawerOpen ? null : (activeCategory || navigationStructure[0].title)) }} className="p-2 mb-4 rounded-lg hover:bg-fundo-principal text-texto-secundario hover:text-primaria-padrao">
                             <IconBars size={24} />
@@ -189,7 +152,6 @@ export default function DashboardLayout() {
                             {navigationStructure.map((category) => {
                                 const isCategoryVisible = category.links.some(link => hasPermission(link.permission));
                                 if (!isCategoryVisible) return null;
-
                                 return (
                                     <button
                                         key={category.title}
@@ -198,9 +160,6 @@ export default function DashboardLayout() {
                                         title={category.title}
                                     >
                                         <category.icon size={22} />
-                                        <span className="absolute left-full ml-4 p-2 w-auto min-w-max rounded-md shadow-md text-white bg-gray-800 text-xs font-bold transition-all opacity-0 group-hover:opacity-100">
-                                            {category.title}
-                                        </span>
                                     </button>
                                 )
                             })}
@@ -213,11 +172,9 @@ export default function DashboardLayout() {
                     </div>
 
                     <div className={`h-full bg-fundo-secundario border-r border-borda flex flex-col transition-all duration-300 overflow-hidden ${isDrawerOpen ? 'w-64' : 'w-0'}`}>
-                        {/* ✅ INÍCIO DA CORREÇÃO: Substituição do H1 pelo IMG */}
-                        <div className="p-4 border-b border-borda">
+                        <div className="p-4 border-b border-borda h-[65px] flex items-center">
                             <img src="/assets/logo.png" alt="Vértice Auto Logo" className="w-32 h-auto" />
                         </div>
-                        {/* ✅ FIM DA CORREÇÃO */}
                         <div className="p-4">
                             <p className="text-sm font-bold truncate text-texto-principal">{empresaLogada?.nome_empresa}</p>
                             <p className="text-xs text-texto-secundario truncate">{empresaLogada?.email}</p>
@@ -231,13 +188,12 @@ export default function DashboardLayout() {
                                     <ul className="space-y-1 px-2">
                                         {category.links.map(link => {
                                             if (!hasPermission(link.permission)) return null;
-
                                             return (
                                                 <li key={link.path}>
                                                     <NavLink
                                                         to={link.path}
                                                         onClick={handleLinkClick}
-                                                        className={({ isActive }) => `flex items-center py-2 px-4 rounded-lg transition-colors text-sm font-semibold ${isActive ? 'bg-primaria-padrao text-white' : 'text-texto-secundario hover:bg-primaria-intermediario hover:text-white'}`}
+                                                        className={({ isActive }) => `flex items-center py-2 px-4 rounded-lg transition-colors text-sm font-semibold ${isActive ? 'bg-primaria-padrao text-white' : 'text-texto-secundario hover:bg-primaria-intermediario hover:text-texto-principal'}`}
                                                     >
                                                         <link.icon className="h-5 w-5 mr-3" />
                                                         <span>{link.label}</span>

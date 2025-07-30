@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Bar } from 'react-chartjs-2';
 import { FaBrain } from 'react-icons/fa';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const IconBrain = FaBrain as React.ElementType;
 
@@ -18,11 +18,12 @@ interface DREData {
     custosTotais: number;
     lucroBruto: number;
     despesasComissoes: number;
+
     despesasOperacionais: number;
     lucroLiquido: number;
 }
 
-const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const formatCurrency = (value: number) => (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const getISODate = (date: Date) => date.toISOString().split('T')[0];
 
 export default function DREPage() {
@@ -39,10 +40,12 @@ export default function DREPage() {
         setLoading(true);
         setAnaliseIA('');
         try {
-            const params = { data_inicio: dataInicio, data_fim: dataFim };
-            const response = await api.get('/relatorios/dre', { params });
+            const functions = getFunctions();
+            const getDRE = httpsCallable(functions, 'getDRE');
+            const response: any = await getDRE({ data_inicio: dataInicio, data_fim: dataFim });
             setDreData(response.data);
         } catch (error) {
+            console.error("Erro ao buscar DRE via Cloud Function:", error);
             alert('Erro ao buscar o DRE.');
         } finally {
             setLoading(false);
@@ -58,7 +61,9 @@ export default function DREPage() {
         setLoadingIA(true);
         setAnaliseIA('');
         try {
-            const response = await api.post('/inteligencia/analisar-dre', { dreData });
+            const functions = getFunctions();
+            const analisarDRE = httpsCallable(functions, 'analisarDRE');
+            const response: any = await analisarDRE({ dreData });
             setAnaliseIA(response.data.analise);
         } catch (error) {
             alert('Erro ao gerar análise com IA.');
@@ -83,11 +88,20 @@ export default function DREPage() {
 
     return (
         <div>
-            <h1 className="text-4xl font-bold mb-6">Demonstrativo de Resultado (DRE Gerencial)</h1>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 p-4 bg-fundo-secundario rounded-lg shadow">
-                <Input label="Data de Início" type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
-                <Input label="Data de Fim" type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
-                <div className="flex items-end"><Button onClick={fetchDRE} disabled={loading}>{loading ? 'A calcular...' : 'Aplicar Filtros'}</Button></div>
+            <h1 className="text-4xl font-bold text-texto-principal mb-6">Demonstrativo de Resultado (DRE Gerencial)</h1>
+            <div className="bg-fundo-secundario p-4 rounded-lg shadow-sm mb-8 border border-borda">
+                <div className="flex flex-col md:flex-row items-end gap-4">
+                    <div className="w-full md:w-auto">
+                        <Input label="Data de Início" type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
+                    </div>
+                    <div className="w-full md:w-auto">
+                        <Input label="Data de Fim" type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
+                    </div>
+                    <div className="flex-grow"></div>
+                    <div className="w-full md:w-auto">
+                        <Button onClick={fetchDRE} disabled={loading} className="w-full">{loading ? 'A calcular...' : 'Aplicar Filtros'}</Button>
+                    </div>
+                </div>
             </div>
 
             {dreData && (

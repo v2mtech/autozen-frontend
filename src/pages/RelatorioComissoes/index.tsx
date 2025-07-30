@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Bar } from 'react-chartjs-2';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db } from '../../firebaseConfig';
 
 // Interfaces
-interface Funcionario { id: number; nome: string; }
+interface Funcionario { id: string; nome: string; }
 interface DetalheComissao {
     funcionario_nome: string;
     servico_nome: string;
-    base_calculo: number;
     valor_comissao: number;
-    data_criacao: string;
 }
 interface DadosGrafico {
     funcionario_nome: string;
@@ -25,34 +26,45 @@ interface Relatorio {
 const getISODate = (date: Date) => date.toISOString().split('T')[0];
 
 export default function RelatorioComissoesPage() {
+    const { user } = useAuth();
     const [relatorio, setRelatorio] = useState<Relatorio | null>(null);
     const [loading, setLoading] = useState(false);
     const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
-
     const [dataInicio, setDataInicio] = useState(() => {
-        const d = new Date();
-        d.setDate(d.getDate() - 30);
-        return getISODate(d);
+        const d = new Date(); d.setDate(d.getDate() - 30); return getISODate(d);
     });
     const [dataFim, setDataFim] = useState(getISODate(new Date()));
     const [funcionarioId, setFuncionarioId] = useState('todos');
 
     useEffect(() => {
-        api.get('/funcionarios').then(res => setFuncionarios(res.data));
-    }, []);
+        const fetchFuncionarios = async () => {
+            if (!user) return;
+            const funcRef = collection(db, 'funcionarios');
+            const q = query(funcRef, where("empresa_id", "==", user.uid));
+            const snap = await getDocs(q);
+            setFuncionarios(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Funcionario)));
+        };
+        fetchFuncionarios();
+    }, [user]);
 
     const fetchRelatorio = useCallback(async () => {
+        if (!user) return;
         setLoading(true);
         try {
-            const params = { data_inicio: dataInicio, data_fim: dataFim, funcionario_id: funcionarioId };
-            const response = await api.get('/relatorios/comissao', { params });
+            const functions = getFunctions();
+            const getRelatorioComissao = httpsCallable(functions, 'getRelatorioComissao');
+            const response: any = await getRelatorioComissao({
+                data_inicio: dataInicio,
+                data_fim: dataFim,
+                funcionario_id: funcionarioId === 'todos' ? null : funcionarioId
+            });
             setRelatorio(response.data);
         } catch (error) {
             alert('Erro ao buscar relatório.');
         } finally {
             setLoading(false);
         }
-    }, [dataInicio, dataFim, funcionarioId]);
+    }, [user, dataInicio, dataFim, funcionarioId]);
 
     useEffect(() => {
         fetchRelatorio();
@@ -83,7 +95,7 @@ export default function RelatorioComissoesPage() {
                     </div>
                     <div className="flex-grow">
                         <label className="text-sm font-semibold text-texto-secundario block mb-2">Funcionário</label>
-                        <select value={funcionarioId} onChange={e => setFuncionarioId(e.target.value)} className="w-full px-4 py-3 bg-white border border-borda rounded-lg focus:ring-2 focus:ring-primaria-escuro focus:outline-none transition duration-200">
+                        <select value={funcionarioId} onChange={e => setFuncionarioId(e.target.value)} className="w-full px-4 py-3 bg-white border border-borda rounded-lg">
                             <option value="todos">Todos</option>
                             {funcionarios.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
                         </select>

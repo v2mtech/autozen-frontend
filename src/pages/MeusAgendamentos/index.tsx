@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '../../services/api';
-import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
 // --- INTERFACES ---
 interface Servico {
@@ -11,17 +12,17 @@ interface Servico {
 }
 
 interface AgendamentoCliente {
-    id: number;
-    data_hora_inicio: string;
+    id: string; // ID do Firestore
+    data_hora_inicio: { toDate: () => Date }; // Objeto de data do Firestore
     status: 'agendado' | 'em andamento' | 'concluido' | 'cancelado';
     empresa_nome_fantasia: string;
     servicos: Servico[] | null;
-    avaliacao_id: number | null;
+    avaliacao_id: string | null;
 }
 
 // --- FUNÇÕES AUXILIARES ---
-function formatDateTime(dateString: string) {
-    return new Date(dateString).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+function formatDateTime(date: Date) {
+    return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function formatTotalCurrency(servicos: Servico[] | null) {
@@ -33,6 +34,7 @@ function formatTotalCurrency(servicos: Servico[] | null) {
 }
 
 export default function MeusAgendamentosPage() {
+    const { user } = useAuth();
     const [agendamentos, setAgendamentos] = useState<AgendamentoCliente[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -43,18 +45,24 @@ export default function MeusAgendamentosPage() {
     const [comentario, setComentario] = useState('');
 
     const fetchMeusAgendamentos = useCallback(async () => {
+        if (!user) return;
         setLoading(true);
         setError('');
         try {
-            const params = new URLSearchParams();
-            if (filtroStatus) params.append('status', filtroStatus);
+            const agendamentosRef = collection(db, 'agendamentos');
+            let q = query(agendamentosRef, where("usuario_id", "==", user.uid));
 
-            const response = await api.get<AgendamentoCliente[]>('/agendamentos/meus', { params });
+            if (filtroStatus) {
+                q = query(q, where("status", "==", filtroStatus));
+            }
 
-            if (Array.isArray(response.data)) {
-                setAgendamentos(response.data);
+            const querySnapshot = await getDocs(q);
+            const agendamentosList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgendamentoCliente));
+
+            if (Array.isArray(agendamentosList)) {
+                setAgendamentos(agendamentosList);
             } else {
-                console.warn("A resposta da API para '/agendamentos/meus' não era um array. A definir como vazio.", response.data);
+                console.warn("A resposta da API para '/agendamentos/meus' não era um array. A definir como vazio.", agendamentosList);
                 setAgendamentos([]);
             }
         } catch (err) {
@@ -63,19 +71,20 @@ export default function MeusAgendamentosPage() {
         } finally {
             setLoading(false);
         }
-    }, [filtroStatus]);
+    }, [user, filtroStatus]);
 
     useEffect(() => {
         fetchMeusAgendamentos();
     }, [fetchMeusAgendamentos]);
 
-    const handleCancelarAgendamento = async (agendamentoId: number) => {
+    const handleCancelarAgendamento = async (agendamentoId: string) => {
         if (window.confirm('Tem certeza que deseja cancelar este agendamento?')) {
             try {
-                await api.patch(`/agendamentos/${agendamentoId}/cancelar`);
+                const agendamentoRef = doc(db, 'agendamentos', agendamentoId);
+                await updateDoc(agendamentoRef, { status: 'cancelado' });
                 fetchMeusAgendamentos();
-            } catch (err: any) {
-                alert(err.response?.data?.error || 'Não foi possível cancelar o agendamento.');
+            } catch (err) {
+                alert('Não foi possível cancelar o agendamento.');
             }
         }
     };
@@ -88,21 +97,30 @@ export default function MeusAgendamentosPage() {
     };
 
     const handleSubmitReview = async () => {
-        if (!agendamentoParaAvaliar || nota === 0) {
+        if (!agendamentoParaAvaliar || !user || nota === 0) {
             alert('Por favor, selecione uma nota de 1 a 5 estrelas.');
             return;
         }
         try {
-            await api.post('/avaliacoes', {
+            const avaliacaoData = {
                 agendamento_id: agendamentoParaAvaliar.id,
+                usuario_id: user.uid,
+                usuario_nome: user.nome,
+                empresa_id: (agendamentoParaAvaliar as any).empresa_id,
                 nota,
-                comentario
-            });
+                comentario,
+                criado_em: new Date(),
+            };
+            const avaliacaoRef = await addDoc(collection(db, 'avaliacoes'), avaliacaoData);
+
+            const agendamentoRef = doc(db, 'agendamentos', agendamentoParaAvaliar.id);
+            await updateDoc(agendamentoRef, { avaliacao_id: avaliacaoRef.id });
+
             alert('Avaliação enviada com sucesso! Agradecemos seu feedback.');
             setReviewModalOpen(false);
             fetchMeusAgendamentos();
-        } catch (err: any) {
-            alert(err.response?.data?.error || 'Não foi possível enviar a avaliação.');
+        } catch (err) {
+            alert('Não foi possível enviar a avaliação.');
         }
     };
 
@@ -121,7 +139,6 @@ export default function MeusAgendamentosPage() {
                     <select id="status-filter" value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} className="w-full px-4 py-3 bg-white border border-borda rounded-lg focus:ring-2 focus:ring-primaria-escuro text-texto-principal">
                         <option value="">Todos os Status</option>
                         <option value="agendado">Agendado</option>
-                        <option value="em andamento">Em Andamento</option>
                         <option value="concluido">Concluído</option>
                         <option value="cancelado">Cancelado</option>
                     </select>
@@ -156,7 +173,7 @@ export default function MeusAgendamentosPage() {
                                     <tr key={agendamento.id} className="hover:bg-fundo-principal">
                                         <td className="p-4 text-texto-principal font-medium">{agendamento.empresa_nome_fantasia}</td>
                                         <td className="p-4 text-texto-secundario">{nomesServicos}</td>
-                                        <td className="p-4 text-texto-secundario">{formatDateTime(agendamento.data_hora_inicio)}</td>
+                                        <td className="p-4 text-texto-secundario">{formatDateTime(agendamento.data_hora_inicio.toDate())}</td>
                                         <td className="p-4 text-texto-principal font-mono">{formatTotalCurrency(agendamento.servicos)}</td>
                                         <td className="p-4">
                                             <span className={`px-2 py-1 rounded-full text-xs font-semibold capitalize ${agendamento.status === 'agendado' ? 'bg-yellow-100 text-yellow-800' :

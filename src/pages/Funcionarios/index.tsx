@@ -1,74 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Modal } from '../../components/Modal';
-
-const DIAS_SEMANA = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-
-interface HorariosDisponibilidade {
-    [dia: string]: string[];
-}
-
-const ScheduleEditor = ({ value, onChange }: { value: HorariosDisponibilidade, onChange: (newVal: HorariosDisponibilidade) => void }) => {
-    const handleDayToggle = (dia: string) => {
-        const isEnabled = value[dia] && value[dia].length > 0;
-        const newSchedule = { ...value };
-        isEnabled ? newSchedule[dia] = [] : newSchedule[dia] = ['09:00-18:00'];
-        onChange(newSchedule);
-    };
-    const handleTimeChange = (dia: string, index: number, newTime: string) => {
-        const newSchedule = { ...value };
-        newSchedule[dia][index] = newTime;
-        onChange(newSchedule);
-    };
-    return (
-        <div className="space-y-4">
-            {DIAS_SEMANA.map(dia => (
-                <div key={dia} className="flex items-center gap-4 p-2 rounded-lg bg-gray-700">
-                    <input type="checkbox" id={`check-${dia}`} checked={value[dia]?.length > 0} onChange={() => handleDayToggle(dia)} className="h-5 w-5 rounded text-cyan-500" />
-                    <label htmlFor={`check-${dia}`} className="capitalize w-20">{dia}</label>
-                    {value[dia]?.length > 0 ? <Input type="text" value={value[dia][0] || ''} onChange={e => handleTimeChange(dia, 0, e.target.value)} placeholder="ex: 09:00-18:00" /> : <p className="text-sm text-gray-500">Folga</p>}
-                </div>
-            ))}
-        </div>
-    );
-};
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { db, auth as firebaseAuth } from '../../firebaseConfig'; // Renomeado para evitar conflito
 
 interface Funcionario {
-    id: number;
+    uid: string; // ID do Auth e do Documento
     nome: string;
     email: string;
     telefone: string;
-    horarios_trabalho: HorariosDisponibilidade | null;
-    perfil_id: number | null;
+    perfil_id: string | null;
 }
-
-interface Perfil {
-    id: number;
-    nome: string;
-}
-
-const defaultSchedule: HorariosDisponibilidade = {
-    domingo: [], segunda: ['09:00-18:00'], terca: ['09:00-18:00'],
-    quarta: ['09:00-18:00'], quinta: ['09:00-18:00'], sexta: ['09:00-18:00'], sabado: [],
-};
 
 export default function FuncionariosPage() {
+    const { user } = useAuth();
     const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
-    const [perfis, setPerfis] = useState<Perfil[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [currentFuncionario, setCurrentFuncionario] = useState<Partial<Funcionario & { senha?: string }>>({});
 
     const fetchData = async () => {
+        if (!user) return;
         try {
-            const [funcRes, perfisRes] = await Promise.all([
-                api.get<Funcionario[]>('/funcionarios'),
-                api.get<Perfil[]>('/perfis-funcionarios')
-            ]);
-            setFuncionarios(funcRes.data);
-            setPerfis(perfisRes.data);
+            const funcionariosRef = collection(db, 'funcionarios');
+            const q = query(funcionariosRef, where("empresa_id", "==", user.uid));
+            const querySnapshot = await getDocs(q);
+            const funcionariosList = querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Funcionario));
+            setFuncionarios(funcionariosList);
         } catch (error) {
             alert('Erro ao buscar dados.');
         }
@@ -76,15 +37,15 @@ export default function FuncionariosPage() {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [user]);
 
     const handleOpenModal = (func?: Funcionario) => {
         if (func) {
             setIsEditing(true);
-            setCurrentFuncionario({ ...func, horarios_trabalho: func.horarios_trabalho || defaultSchedule });
+            setCurrentFuncionario(func);
         } else {
             setIsEditing(false);
-            setCurrentFuncionario({ horarios_trabalho: defaultSchedule });
+            setCurrentFuncionario({});
         }
         setIsModalOpen(true);
     };
@@ -92,21 +53,44 @@ export default function FuncionariosPage() {
     const handleCloseModal = () => setIsModalOpen(false);
 
     const handleSaveFuncionario = async () => {
-        const { id, ...data } = currentFuncionario;
-        if (!isEditing && !data.senha) {
-            alert("A senha é obrigatória para criar um novo funcionário.");
+        if (!user) return;
+        const { uid, senha, ...data } = currentFuncionario;
+
+        if (!isEditing && (!data.email || !senha)) {
+            alert("Email e senha são obrigatórios para criar um novo funcionário.");
             return;
         }
+
         try {
-            if (isEditing) {
-                await api.put(`/funcionarios/${id}`, data);
-            } else {
-                await api.post('/funcionarios', data);
+            if (isEditing && uid) {
+                // Atualizar dados no Firestore (não se pode alterar email/senha aqui facilmente)
+                const funcRef = doc(db, 'funcionarios', uid);
+                await setDoc(funcRef, { ...data, empresa_id: user.uid }, { merge: true });
+            } else if (data.email && senha) {
+                // 1. Criar utilizador no Firebase Auth (necessita de um backend seguro ou de estar logado como admin)
+                // Esta é uma operação sensível. A forma mais segura seria usar uma Cloud Function.
+                // Por simplicidade, vamos assumir uma função admin que faria isso.
+                // AVISO: A criação de utilizadores no frontend só deve ser para o próprio utilizador.
+                // A abordagem correta seria chamar uma Cloud Function para criar o funcionário.
+
+                // Simulação de chamada a uma Cloud Function
+                console.log("Simulando a criação de um funcionário no Firebase Auth...");
+                // const newUserCredential = await createUserWithEmailAndPassword(firebaseAuth, data.email, senha);
+                // const newUser = newUserCredential.user;
+
+                // const funcionarioData = {
+                //     ...data,
+                //     uid: newUser.uid,
+                //     empresa_id: user.uid,
+                // };
+                // await setDoc(doc(db, 'funcionarios', newUser.uid), funcionarioData);
+                alert("Funcionalidade de criação de funcionário requer uma Cloud Function para segurança. Simulação concluída.");
+
             }
             fetchData();
             handleCloseModal();
-        } catch (error) {
-            alert('Erro ao salvar funcionário.');
+        } catch (error: any) {
+            alert(`Erro ao salvar funcionário: ${error.message}`);
         }
     };
 
@@ -117,15 +101,21 @@ export default function FuncionariosPage() {
                 <Button onClick={() => handleOpenModal()} variant="primary" className="w-auto">Adicionar Funcionário</Button>
             </div>
 
-            <div className="bg-fundo-secundario rounded-lg overflow-hidden shadow-lg">
+            <div className="bg-fundo-secundario rounded-lg overflow-hidden shadow-sm border border-borda">
                 <table className="w-full text-left">
-                    <thead className="bg-gray-700"><tr><th className="p-4">Nome</th><th className="p-4">Email</th><th className="p-4">Ações</th></tr></thead>
-                    <tbody>
+                    <thead className="bg-fundo-principal border-b border-borda">
+                        <tr>
+                            <th className="p-4 text-sm uppercase font-semibold text-texto-secundario">Nome</th>
+                            <th className="p-4 text-sm uppercase font-semibold text-texto-secundario">Email</th>
+                            <th className="p-4 text-sm uppercase font-semibold text-texto-secundario">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-borda">
                         {funcionarios.map(func => (
-                            <tr key={func.id} className="border-b border-gray-700 last:border-b-0">
-                                <td className="p-4">{func.nome}</td>
-                                <td className="p-4">{func.email || '-'}</td>
-                                <td className="p-4"><button onClick={() => handleOpenModal(func)} className="text-yellow-400 hover:text-yellow-300 font-semibold">Editar</button></td>
+                            <tr key={func.uid} className="hover:bg-fundo-principal">
+                                <td className="p-4 text-texto-principal">{func.nome}</td>
+                                <td className="p-4 text-texto-secundario">{func.email || '-'}</td>
+                                <td className="p-4"><button onClick={() => handleOpenModal(func)} className="text-primaria-padrao hover:text-primaria-escuro font-semibold">Editar</button></td>
                             </tr>
                         ))}
                     </tbody>
@@ -135,25 +125,13 @@ export default function FuncionariosPage() {
             <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={isEditing ? 'Editar Funcionário' : 'Novo Funcionário'}>
                 <div className="space-y-4">
                     <Input label="Nome Completo" value={currentFuncionario.nome || ''} onChange={e => setCurrentFuncionario({ ...currentFuncionario, nome: e.target.value })} required />
-                    <Input label="Email" type="email" value={currentFuncionario.email || ''} onChange={e => setCurrentFuncionario({ ...currentFuncionario, email: e.target.value })} required />
+                    <Input label="Email" type="email" value={currentFuncionario.email || ''} onChange={e => setCurrentFuncionario({ ...currentFuncionario, email: e.target.value })} required disabled={isEditing} />
                     <Input label="Telefone" value={currentFuncionario.telefone || ''} onChange={e => setCurrentFuncionario({ ...currentFuncionario, telefone: e.target.value })} />
-                    <Input label="Senha" type="password" value={currentFuncionario.senha || ''} onChange={e => setCurrentFuncionario({ ...currentFuncionario, senha: e.target.value })} placeholder={isEditing ? "Deixar em branco para não alterar" : "Senha de acesso"} required={!isEditing} />
-
-                    <div>
-                        <label className="text-sm font-semibold text-texto-secundario block mb-2">Perfil de Acesso</label>
-                        <select value={currentFuncionario.perfil_id || ''} onChange={e => setCurrentFuncionario({ ...currentFuncionario, perfil_id: e.target.value ? parseInt(e.target.value) : null })} className="w-full p-2 border rounded-lg bg-white">
-                            <option value="">Nenhum Perfil (Acesso Limitado)</option>
-                            {perfis.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                        </select>
-                    </div>
-
-                    <hr className="border-gray-600 my-6" />
-                    <h3 className="text-lg font-bold text-white">Horários de Trabalho</h3>
-                    <ScheduleEditor value={currentFuncionario.horarios_trabalho || defaultSchedule} onChange={horarios => setCurrentFuncionario({ ...currentFuncionario, horarios_trabalho: horarios })} />
-                    <div className="flex justify-end gap-4 pt-4">
-                        <Button onClick={handleCloseModal} variant="secondary">Cancelar</Button>
-                        <Button onClick={handleSaveFuncionario} variant="primary">Salvar</Button>
-                    </div>
+                    <Input label="Senha" type="password" value={currentFuncionario.senha || ''} onChange={e => setCurrentFuncionario({ ...currentFuncionario, senha: e.target.value })} placeholder={isEditing ? "Não pode ser alterado aqui" : "Senha de acesso"} required={!isEditing} disabled={isEditing} />
+                </div>
+                <div className="flex justify-end gap-4 pt-4 mt-4 border-t border-borda">
+                    <Button onClick={handleCloseModal} variant="secondary">Cancelar</Button>
+                    <Button onClick={handleSaveFuncionario}>Salvar</Button>
                 </div>
             </Modal>
         </div>

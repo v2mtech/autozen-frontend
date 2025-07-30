@@ -4,8 +4,11 @@ import api from '../../services/api';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { MaskedInput } from '../../components/MaskedInput';
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from '../../firebaseConfig';
 
-// Interfaces para os dados da API FIPE
+// Interfaces para os dados da API FIPE (permanecem iguais)
 interface Marca {
   codigo: string;
   nome: string;
@@ -26,51 +29,41 @@ export default function CadastroUsuarioPage() {
     tipo_documento: 'CPF', cpf_cnpj: '', cep: '', endereco_rua: '',
     endereco_numero: '', endereco_bairro: '', endereco_cidade: '',
     endereco_estado: '', complemento: '',
-    veiculo_marca: '', veiculo_modelo: '', veiculo_ano: '', 
+    veiculo_marca: '', veiculo_modelo: '', veiculo_ano: '',
     veiculo_placa: '', veiculo_cor: ''
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [cepLoading, setCepLoading] = useState(false);
 
-  // States para as listas dinâmicas de veículos
+  // A lógica para buscar dados da FIPE não muda, pois é uma API pública externa
   const [marcas, setMarcas] = useState<Marca[]>([]);
   const [modelos, setModelos] = useState<Modelo[]>([]);
   const [anos, setAnos] = useState<Ano[]>([]);
-  
-  // States para os IDs selecionados, que controlam as buscas
   const [selectedMarca, setSelectedMarca] = useState('');
   const [selectedModelo, setSelectedModelo] = useState('');
 
-  // Busca as marcas de veículos assim que a página carrega
   useEffect(() => {
-    api.get('/veiculos/marcas').then(response => {
-      setMarcas(response.data);
-    }).catch(err => console.error("Falha ao carregar marcas", err));
+    api.get('/veiculos/marcas').then(response => setMarcas(response.data))
+      .catch(err => console.error("Falha ao carregar marcas", err));
   }, []);
 
-  // Busca os modelos sempre que uma marca é selecionada
   useEffect(() => {
     if (selectedMarca) {
       setModelos([]);
       setAnos([]);
-      setFormData(prev => ({ ...prev, veiculo_modelo: '', veiculo_ano: '' }));
-      api.get(`/veiculos/marcas/${selectedMarca}/modelos`).then(response => {
-        setModelos(response.data);
-      }).catch(err => console.error("Falha ao carregar modelos", err));
+      api.get(`/veiculos/marcas/${selectedMarca}/modelos`).then(response => setModelos(response.data))
+        .catch(err => console.error("Falha ao carregar modelos", err));
     }
   }, [selectedMarca]);
 
-  // Busca os anos sempre que um modelo é selecionado
   useEffect(() => {
     if (selectedMarca && selectedModelo) {
       setAnos([]);
-      setFormData(prev => ({ ...prev, veiculo_ano: '' }));
-      api.get(`/veiculos/marcas/${selectedMarca}/modelos/${selectedModelo}/anos`).then(response => {
-        setAnos(response.data);
-      }).catch(err => console.error("Falha ao carregar anos", err));
+      api.get(`/veiculos/marcas/${selectedMarca}/modelos/${selectedModelo}/anos`).then(response => setAnos(response.data))
+        .catch(err => console.error("Falha ao carregar anos", err));
     }
   }, [selectedModelo, selectedMarca]);
 
@@ -98,24 +91,22 @@ export default function CadastroUsuarioPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
-    // Lógica especial para os selects de veículo
+
     if (name === 'veiculo_marca_select') {
       const marcaSelecionada = marcas.find(m => m.codigo === value);
       setSelectedMarca(value);
-      setSelectedModelo(''); // Limpa o modelo ao trocar de marca
-      setFormData(prev => ({ ...prev, veiculo_marca: marcaSelecionada?.nome || '' }));
+      setSelectedModelo('');
+      setFormData(prev => ({ ...prev, veiculo_marca: marcaSelecionada?.nome || '', veiculo_modelo: '', veiculo_ano: '' }));
       return;
     }
-    
+
     if (name === 'veiculo_modelo_select') {
       const modeloSelecionado = modelos.find(m => m.codigo.toString() === value);
       setSelectedModelo(value);
-      setFormData(prev => ({ ...prev, veiculo_modelo: modeloSelecionado?.nome || '' }));
+      setFormData(prev => ({ ...prev, veiculo_modelo: modeloSelecionado?.nome || '', veiculo_ano: '' }));
       return;
     }
-    
-    // Lógica padrão para os outros campos
+
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -123,31 +114,55 @@ export default function CadastroUsuarioPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
-    setLoading(true);
 
     if (formData.senha !== formData.confirmarSenha) {
       setError('As senhas não coincidem.');
-      setLoading(false);
+      return;
+    }
+    if (!formData.email || !formData.senha) {
+      setError('Email e senha são obrigatórios.');
       return;
     }
 
+    setLoading(true);
     try {
-      const { confirmarSenha, ...apiData } = formData;
-      await api.post('/usuarios', apiData);
+      // 1. Criar o utilizador no Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.senha);
+      const user = userCredential.user;
+
+      // 2. Preparar os dados para salvar no Firestore (sem os campos sensíveis)
+      const { senha, confirmarSenha, ...dadosParaFirestore } = formData;
+      const usuarioData = {
+        ...dadosParaFirestore,
+        uid: user.uid,
+        email: user.email, // Salva o email canónico do Firebase
+        criado_em: new Date(),
+      };
+
+      // 3. Criar um documento na coleção 'usuarios' com o UID do utilizador como ID
+      await setDoc(doc(db, "usuarios", user.uid), usuarioData);
+
       setSuccess('Registo realizado com sucesso! Será redirecionado para o login.');
       setTimeout(() => navigate('/login/usuario'), 3000);
+
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Não foi possível realizar o registo.');
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Este email já está registado.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('A senha deve ter pelo menos 6 caracteres.');
+      } else {
+        setError('Não foi possível realizar o registo.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
+    // O JSX do formulário permanece o mesmo, apenas a lógica de 'handleSubmit' foi alterada.
     <div className="w-full max-w-5xl mx-auto bg-auth-card rounded-2xl shadow-xl p-8 md:p-12 my-10 animate-fade-in-up">
       <h1 className="text-3xl font-bold text-auth-text-dark text-center mb-8">Crie a sua Conta de Cliente</h1>
       <form onSubmit={handleSubmit} className="space-y-8">
-        
         <fieldset className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5 border-t border-auth-border pt-6">
           <legend className="text-lg font-semibold text-auth-button px-2 -mb-4">Dados Pessoais</legend>
           <Input label="Nome Completo" name="nome" value={formData.nome} onChange={handleChange} required />
@@ -162,21 +177,21 @@ export default function CadastroUsuarioPage() {
               </select>
             </div>
             <div className="w-2/3">
-              <MaskedInput 
-                label={formData.tipo_documento} 
-                name="cpf_cnpj" 
+              <MaskedInput
+                label={formData.tipo_documento}
+                name="cpf_cnpj"
                 mask={formData.tipo_documento === 'CPF' ? '000.000.000-00' : '00.000.000/0000-00'}
                 placeholder={formData.tipo_documento === 'CPF' ? '000.000.000-00' : '00.000.000/0000-00'}
-                value={formData.cpf_cnpj} 
-                onChange={handleChange} 
-                required 
+                value={formData.cpf_cnpj}
+                onChange={handleChange}
+                required
               />
             </div>
           </div>
           <Input label="Senha" type="password" name="senha" value={formData.senha} onChange={handleChange} required />
           <Input label="Confirmar Senha" type="password" name="confirmarSenha" value={formData.confirmarSenha} onChange={handleChange} required />
         </fieldset>
-        
+
         <fieldset className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-5 border-t border-auth-border pt-6">
           <legend className="text-lg font-semibold text-auth-button px-2 -mb-4">Endereço</legend>
           <div className="relative">
@@ -190,7 +205,7 @@ export default function CadastroUsuarioPage() {
           <Input label="Cidade" name="endereco_cidade" value={formData.endereco_cidade} onChange={handleChange} />
           <Input label="Estado" name="endereco_estado" value={formData.endereco_estado} onChange={handleChange} />
         </fieldset>
-        
+
         <fieldset className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-5 border-t border-auth-border pt-6">
           <legend className="text-lg font-semibold text-auth-button px-2 -mb-4">Veículo</legend>
           <div>
@@ -220,7 +235,7 @@ export default function CadastroUsuarioPage() {
 
         {error && <p className="text-red-500 text-sm text-center pt-2">{error}</p>}
         {success && <p className="text-green-500 text-sm text-center pt-2">{success}</p>}
-        
+
         <div className="pt-4 flex flex-col items-center">
           <div className="w-full md:w-1/3">
             <Button type="submit" disabled={loading} variant="primary">
@@ -230,7 +245,7 @@ export default function CadastroUsuarioPage() {
           <p className="text-center text-auth-text-light text-sm mt-6">
             Já possui uma conta?{' '}
             <Link to="/login/usuario" className="font-semibold text-auth-button hover:underline">
-                Faça Login
+              Faça Login
             </Link>
           </p>
         </div>

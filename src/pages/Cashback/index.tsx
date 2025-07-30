@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Modal } from '../../components/Modal';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs, doc, addDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
 interface Promocao {
-  id: number;
+  id: string; // ID do Firestore
   descricao: string;
   valor_meta: number;
   percentual_cashback: number;
@@ -13,6 +15,7 @@ interface Promocao {
 }
 
 export default function CashbackPage() {
+  const { user } = useAuth();
   const [promocoes, setPromocoes] = useState<Promocao[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPromocao, setCurrentPromocao] = useState<Partial<Promocao>>({});
@@ -21,13 +24,17 @@ export default function CashbackPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchPromocoes = async () => {
+    if (!user) return;
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get('/cashback/promocoes');
-      setPromocoes(response.data as Promocao[]);
+      const promocoesRef = collection(db, 'promocoes_cashback');
+      const q = query(promocoesRef, where("empresa_id", "==", user.uid));
+      const querySnapshot = await getDocs(q);
+      const promocoesList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promocao));
+      setPromocoes(promocoesList);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao buscar promoções.');
+      setError('Erro ao buscar promoções.');
     } finally {
       setLoading(false);
     }
@@ -35,14 +42,14 @@ export default function CashbackPage() {
 
   useEffect(() => {
     fetchPromocoes();
-  }, []);
+  }, [user]);
 
   const handleOpenModal = (promocao?: Promocao) => {
     if (promocao) {
       setCurrentPromocao(promocao);
       setIsEditing(true);
     } else {
-      setCurrentPromocao({});
+      setCurrentPromocao({ ativo: true });
       setIsEditing(false);
     }
     setIsModalOpen(true);
@@ -51,18 +58,21 @@ export default function CashbackPage() {
   const handleCloseModal = () => setIsModalOpen(false);
 
   const handleSave = async () => {
+    if (!user) return;
     setError(null);
     const { id, ...data } = currentPromocao;
+    const dataToSave = { ...data, empresa_id: user.uid };
     try {
-      if (isEditing) {
-        await api.put(`/cashback/promocoes/${id}`, data);
+      if (isEditing && id) {
+        const promoRef = doc(db, 'promocoes_cashback', id);
+        await updateDoc(promoRef, dataToSave);
       } else {
-        await api.post('/cashback/promocoes', data);
+        await addDoc(collection(db, 'promocoes_cashback'), dataToSave);
       }
       fetchPromocoes();
       handleCloseModal();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao salvar promoção.');
+      setError('Erro ao salvar promoção.');
     }
   };
 
@@ -70,10 +80,11 @@ export default function CashbackPage() {
     setError(null);
     if (window.confirm(`Deseja ${promocao.ativo ? 'desativar' : 'ativar'} esta promoção?`)) {
       try {
-        await api.patch(`/cashback/promocoes/${promocao.id}/status`, { ativo: !promocao.ativo });
+        const promoRef = doc(db, 'promocoes_cashback', promocao.id);
+        await updateDoc(promoRef, { ativo: !promocao.ativo });
         fetchPromocoes();
       } catch (err: any) {
-        setError(err.response?.data?.error || 'Erro ao alterar status.');
+        setError('Erro ao alterar status.');
       }
     }
   }
@@ -132,7 +143,7 @@ export default function CashbackPage() {
 
           {error && <p className="text-erro text-sm text-center">{error}</p>}
 
-          <div className="flex justify-end gap-4 pt-4">
+          <div className="flex justify-end gap-4 pt-4 mt-4 border-t border-borda">
             <Button onClick={handleCloseModal} variant="secondary">Cancelar</Button>
             <Button onClick={handleSave} variant="primary">Salvar</Button>
           </div>

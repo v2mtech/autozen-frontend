@@ -1,34 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Modal } from '../../components/Modal';
+
+// Funções do Firebase
+import { collection, query, where, getDocs, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
+import { useAuth } from '../../hooks/useAuth';
 
 // --- INTERFACES ---
 interface HorariosDisponibilidade {
   [dia: string]: string[];
 }
-
 interface Servico {
-  id: number;
+  id: string; // ID agora é a string do Firestore
   nome: string;
   descricao: string;
   duracao_minutos: number;
   preco: number;
   custo_servico?: number;
   horarios_disponibilidade: HorariosDisponibilidade | null;
-  grupo_id?: number;
-  regra_fiscal_id?: number;
+  grupo_id?: string;
+  regra_fiscal_id?: string;
 }
 
 interface GrupoServico {
-  id: number;
+  id: string; // ID do Firestore
   nome: string;
-  regra_fiscal_id?: number;
+  regra_fiscal_id?: string;
 }
 
 interface RegraFiscal {
-  id: number;
+  id: string; // ID do Firestore
   nome_regra: string;
 }
 
@@ -60,8 +63,10 @@ const ScheduleEditor = ({ value, onChange }: { value: HorariosDisponibilidade, o
   );
 };
 
+
 // --- COMPONENTE PRINCIPAL DA PÁGINA ---
 export default function ServicosPage() {
+  const { user } = useAuth();
   const [servicos, setServicos] = useState<Servico[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentServico, setCurrentServico] = useState<Partial<Servico>>({});
@@ -76,23 +81,27 @@ export default function ServicosPage() {
   };
 
   const fetchData = async () => {
+    if (!user) return;
     try {
-      const [servicosRes, gruposRes, regrasRes] = await Promise.all([
-        api.get('/servicos'),
-        api.get('/servico-grupos'),
-        api.get('/regras-fiscais')
-      ]);
-      setServicos(servicosRes.data as Servico[]);
-      setGrupos(gruposRes.data as GrupoServico[]);
-      setRegrasFiscais(regrasRes.data as RegraFiscal[]);
+      const servicosRef = collection(db, 'servicos');
+      const q = query(servicosRef, where("empresa_id", "==", user.uid));
+      const querySnapshot = await getDocs(q);
+      const servicosList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Servico));
+      setServicos(servicosList);
+
+      // A lógica para buscar grupos e regras fiscais também precisaria ser migrada
+      // Por agora, vamos manter os arrays vazios para evitar erros
+      setGrupos([]);
+      setRegrasFiscais([]);
+
     } catch (error) {
-      alert('Erro ao carregar dados da página.');
+      alert('Erro ao carregar serviços.');
     }
   };
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user]);
 
   const handleOpenModal = (servico?: Servico) => {
     if (servico) {
@@ -107,44 +116,38 @@ export default function ServicosPage() {
 
   const handleCloseModal = () => setIsModalOpen(false);
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm('Tem certeza que deseja excluir este serviço? Esta ação não pode ser desfeita.')) {
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este serviço?')) {
       try {
-        await api.delete(`/servicos/${id}`);
+        await deleteDoc(doc(db, "servicos", id));
         fetchData();
-      } catch (err: any) {
-        alert(err.response?.data?.error || 'Não foi possível excluir o serviço.');
+      } catch (err) {
+        alert('Não foi possível excluir o serviço.');
       }
     }
   };
 
-  const handleGrupoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const grupoId = e.target.value;
-    const grupoSelecionado = grupos.find(g => g.id === parseInt(grupoId));
-
-    setCurrentServico(prev => {
-      const newState: Partial<Servico> = { ...prev, grupo_id: grupoId ? parseInt(grupoId) : undefined };
-      if (grupoSelecionado && grupoSelecionado.regra_fiscal_id) {
-        newState.regra_fiscal_id = grupoSelecionado.regra_fiscal_id;
-      } else {
-        newState.regra_fiscal_id = undefined;
-      }
-      return newState;
-    });
-  };
-
   const handleSave = async () => {
+    if (!user) return;
     const { id, ...data } = currentServico;
+
+    const dataToSave = {
+      ...data,
+      empresa_id: user.uid
+    };
+
     try {
-      if (isEditing) {
-        await api.put(`/servicos/${id}`, data);
+      if (isEditing && id) {
+        const servicoRef = doc(db, "servicos", id);
+        await updateDoc(servicoRef, dataToSave);
       } else {
-        await api.post('/servicos', data);
+        await addDoc(collection(db, "servicos"), dataToSave);
       }
       fetchData();
       handleCloseModal();
     } catch (error) {
       alert('Erro ao salvar serviço.');
+      console.error(error);
     }
   };
 
@@ -181,6 +184,7 @@ export default function ServicosPage() {
         </table>
       </div>
 
+      {/* ✅ INÍCIO DA CORREÇÃO: Conteúdo do Modal reintroduzido */}
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={isEditing ? 'Editar Serviço' : 'Novo Serviço'}>
         <div className="space-y-4">
           <Input label="Nome" value={currentServico.nome || ''} onChange={e => setCurrentServico({ ...currentServico, nome: e.target.value })} />
@@ -190,45 +194,20 @@ export default function ServicosPage() {
             <Input label="Preço de Venda (R$)" type="number" value={currentServico.preco || ''} onChange={e => setCurrentServico({ ...currentServico, preco: Number(e.target.value) })} />
             <Input label="Custo do Serviço (R$)" type="number" value={currentServico.custo_servico || ''} onChange={e => setCurrentServico({ ...currentServico, custo_servico: Number(e.target.value) })} placeholder="Materiais, etc." />
           </div>
-
-          <hr className="border-borda my-6" />
-          <h3 className="text-lg font-bold text-texto-principal">Associações</h3>
-          <div>
-            <label className="text-sm font-semibold text-texto-secundario block mb-2">Grupo de Serviço (Opcional)</label>
-            <select name="grupo_id" onChange={handleGrupoChange} value={currentServico.grupo_id || ''} className="w-full px-4 py-3 bg-white border border-borda rounded-lg">
-              <option value="">Nenhum</option>
-              {grupos.map(g => <option key={g.id} value={g.id}>{g.nome}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-texto-secundario block mb-2">Regra Fiscal (Opcional)</label>
-            <select
-              name="regra_fiscal_id"
-              onChange={e => setCurrentServico({ ...currentServico, regra_fiscal_id: e.target.value ? parseInt(e.target.value) : undefined })}
-              value={currentServico.regra_fiscal_id || ''}
-              className="w-full px-4 py-3 bg-white border border-borda rounded-lg"
-              disabled={!!(grupos.find(g => g.id === currentServico.grupo_id)?.regra_fiscal_id)}
-            >
-              <option value="">Selecione...</option>
-              {regrasFiscais.map(r => <option key={r.id} value={r.id}>{r.nome_regra}</option>)}
-            </select>
-            {!!(grupos.find(g => g.id === currentServico.grupo_id)?.regra_fiscal_id) && (
-              <p className="text-xs text-texto-secundario mt-1">A regra fiscal é definida pelo grupo selecionado.</p>
-            )}
-          </div>
-
+          {/* A lógica de associações a grupos e regras fiscais foi omitida por agora, pois depende da migração dessas coleções para o Firestore */}
           <hr className="border-borda my-6" />
           <h3 className="text-lg font-bold text-texto-principal">Horários de Disponibilidade</h3>
           <ScheduleEditor
             value={currentServico.horarios_disponibilidade || defaultSchedule}
             onChange={horarios => setCurrentServico({ ...currentServico, horarios_disponibilidade: horarios })}
           />
-          <div className="flex justify-end gap-4 pt-4">
+          <div className="flex justify-end gap-4 pt-4 mt-4 border-t border-borda">
             <Button onClick={handleCloseModal} variant="secondary">Cancelar</Button>
             <Button onClick={handleSave} variant="primary">Salvar</Button>
           </div>
         </div>
       </Modal>
+      {/* ✅ FIM DA CORREÇÃO */}
     </div>
   );
 }

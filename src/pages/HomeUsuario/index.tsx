@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../../services/api';
-import { Button } from '../../components/Button';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../firebaseConfig'; // Importa a configuração do Firebase
 
 interface Empresa {
-  id: number;
+  uid: string; // O ID agora é o UID do Firebase
   nome_fantasia: string;
   endereco_cidade: string;
   endereco_estado: string;
@@ -21,15 +21,17 @@ export default function HomeUsuarioPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await api.get<Empresa[]>('/empresas');
-        if (Array.isArray(response.data)) {
-          setEmpresas(response.data);
-        } else {
-          console.warn("A resposta da API para '/empresas' não era um array.", response.data);
-          setEmpresas([]);
-        }
+        const empresasCollectionRef = collection(db, 'empresas');
+        const querySnapshot = await getDocs(empresasCollectionRef);
+
+        const empresasList = querySnapshot.docs.map(doc => ({
+          uid: doc.id,
+          ...doc.data()
+        } as Empresa));
+
+        setEmpresas(empresasList);
       } catch (err) {
-        console.error("Erro ao buscar empresas:", err);
+        console.error("Erro ao buscar empresas do Firestore:", err);
         setError("Não foi possível carregar os estabelecimentos. Tente recarregar a página.");
       } finally {
         setLoading(false);
@@ -57,14 +59,14 @@ export default function HomeUsuarioPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {empresas.length > 0 ? empresas.map(empresa => (
           <Link
-            to={`/empresas/${empresa.id}`}
-            key={empresa.id}
+            to={`/empresas/${empresa.uid}`} // A rota agora usa o UID
+            key={empresa.uid}
             className="block bg-fundo-secundario rounded-lg overflow-hidden border border-borda hover:border-primaria-padrao hover:shadow-lg transform transition-all duration-300"
           >
             <div className="h-40 bg-gray-200 flex items-center justify-center overflow-hidden">
               {empresa.logo_url ? (
                 <img
-                  src={`http://localhost:3333${empresa.logo_url}`}
+                  src={empresa.logo_url} // A URL agora vem diretamente do Firestore/Storage
                   alt={`Logo de ${empresa.nome_fantasia}`}
                   className="w-full h-full object-cover"
                 />

@@ -1,21 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db } from '../../firebaseConfig';
 
-interface Produto { id: number; nome: string; }
+interface Produto { id: string; nome: string; }
 interface Movimentacao {
-    data_movimento: string;
+    data_movimento: { toDate: () => Date };
     produto_nome: string;
     tipo: string;
     quantidade: number;
     observacao: string | null;
-    agendamento_id: number | null;
+    agendamento_id: string | null;
 }
 
 const getISODate = (date: Date) => date.toISOString().split('T')[0];
 
 export default function AuditoriaEstoquePage() {
+    const { user } = useAuth();
     const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
     const [produtos, setProdutos] = useState<Produto[]>([]);
     const [loading, setLoading] = useState(false);
@@ -26,21 +30,37 @@ export default function AuditoriaEstoquePage() {
     const [produtoId, setProdutoId] = useState('todos');
 
     useEffect(() => {
-        api.get('/produtos').then(res => setProdutos(res.data));
-    }, []);
+        const fetchProdutos = async () => {
+            if (!user) return;
+            const produtosRef = collection(db, 'produtos');
+            const q = query(produtosRef, where("empresa_id", "==", user.uid));
+            const snap = await getDocs(q);
+            setProdutos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Produto)));
+        };
+        fetchProdutos();
+    }, [user]);
 
     const fetchAuditoria = useCallback(async () => {
+        if (!user) return;
         setLoading(true);
         try {
-            const params = { data_inicio: dataInicio, data_fim: dataFim, produto_id: produtoId };
-            const response = await api.get('/relatorios/auditoria-estoque', { params });
+            const functions = getFunctions();
+            const getAuditoriaEstoque = httpsCallable(functions, 'getAuditoriaEstoque');
+
+            const response: any = await getAuditoriaEstoque({
+                data_inicio: dataInicio,
+                data_fim: dataFim,
+                produto_id: produtoId === 'todos' ? null : produtoId
+            });
+
             setMovimentacoes(response.data);
         } catch (error) {
+            console.error("Erro ao buscar auditoria:", error);
             alert('Erro ao buscar auditoria de estoque.');
         } finally {
             setLoading(false);
         }
-    }, [dataInicio, dataFim, produtoId]);
+    }, [user, dataInicio, dataFim, produtoId]);
 
     useEffect(() => {
         fetchAuditoria();
@@ -85,11 +105,11 @@ export default function AuditoriaEstoquePage() {
                     <tbody className="divide-y divide-borda">
                         {movimentacoes.map((item, index) => (
                             <tr key={index} className="hover:bg-fundo-principal">
-                                <td className="p-4 text-texto-secundario">{new Date(item.data_movimento).toLocaleString('pt-BR')}</td>
+                                <td className="p-4 text-texto-secundario">{item.data_movimento.toDate().toLocaleString('pt-BR')}</td>
                                 <td className="p-4 text-texto-principal font-medium">{item.produto_nome}</td>
                                 <td className="p-4 text-texto-secundario">{item.tipo}</td>
                                 <td className={`p-4 font-bold ${item.quantidade > 0 ? 'text-green-600' : 'text-red-500'}`}>{item.quantidade > 0 ? `+${item.quantidade}` : item.quantidade}</td>
-                                <td className="p-4 text-texto-secundario">{item.observacao || (item.agendamento_id ? `Ref. OS #${item.agendamento_id}` : '-')}</td>
+                                <td className="p-4 text-texto-secundario">{item.observacao || (item.agendamento_id ? `Ref. OS #${item.agendamento_id.substring(0, 6)}` : '-')}</td>
                             </tr>
                         ))}
                     </tbody>

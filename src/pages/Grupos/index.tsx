@@ -1,13 +1,13 @@
-
-import api from '../../services/api';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Modal } from '../../components/Modal';
-import { useEffect, useState } from 'react';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs, doc, addDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
-// Interface simplificada apenas para Grupos de Produto
 interface Grupo {
-    id: number;
+    id: string;
     nome: string;
     codigo: string;
     descricao: string;
@@ -15,6 +15,7 @@ interface Grupo {
 }
 
 export default function GruposPage() {
+    const { user } = useAuth();
     const [grupos, setGrupos] = useState<Grupo[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentGrupo, setCurrentGrupo] = useState<Partial<Grupo>>({});
@@ -22,11 +23,13 @@ export default function GruposPage() {
     const [loading, setLoading] = useState(true);
 
     const fetchData = async () => {
+        if (!user) return;
         setLoading(true);
         try {
-            // Busca apenas os grupos de produto
-            const gruposRes = await api.get('/grupos');
-            setGrupos(gruposRes.data);
+            const gruposRef = collection(db, 'produto_grupos');
+            const q = query(gruposRef, where("empresa_id", "==", user.uid));
+            const snap = await getDocs(q);
+            setGrupos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Grupo)));
         } catch (error) {
             alert('Erro ao carregar dados da página.');
         } finally {
@@ -36,7 +39,7 @@ export default function GruposPage() {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [user]);
 
     const handleOpenModal = (grupo?: Grupo) => {
         if (grupo) {
@@ -48,20 +51,21 @@ export default function GruposPage() {
         }
         setIsModalOpen(true);
     };
-    
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setCurrentGrupo(prev => ({ ...prev, [name]: value }));
     };
 
     const handleSave = async () => {
-        // Envia apenas os dados relevantes para o grupo de produtos
+        if (!user) return;
         const { id, ...data } = currentGrupo;
+        const dataToSave = { ...data, empresa_id: user.uid };
         try {
-            if (isEditing) {
-                await api.put(`/grupos/${id}`, data);
+            if (isEditing && id) {
+                await updateDoc(doc(db, 'produto_grupos', id), dataToSave);
             } else {
-                await api.post('/grupos', data);
+                await addDoc(collection(db, 'produto_grupos'), dataToSave);
             }
             fetchData();
             setIsModalOpen(false);
@@ -76,16 +80,16 @@ export default function GruposPage() {
                 <h1 className="text-4xl font-bold text-texto-principal">Grupos de Produtos</h1>
                 <Button onClick={() => handleOpenModal()} className="w-auto">Adicionar Grupo</Button>
             </div>
-            
-            <div className="bg-fundo-secundario rounded-lg shadow-md p-4 border border-borda">
+
+            <div className="bg-fundo-secundario rounded-lg shadow-sm p-4 border border-borda">
                 {grupos.map(grupo => (
-                    <div key={grupo.id} onClick={() => handleOpenModal(grupo)} className="p-3 border-b border-borda last:border-b-0 cursor-pointer hover:bg-gray-100">
+                    <div key={grupo.id} onClick={() => handleOpenModal(grupo)} className="p-3 border-b border-borda last:border-b-0 cursor-pointer hover:bg-fundo-principal">
                         <p className="font-bold text-texto-principal">{grupo.nome}</p>
                         <p className="text-sm text-texto-secundario">{grupo.descricao}</p>
                     </div>
                 ))}
             </div>
-            
+
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditing ? 'Editar Grupo' : 'Novo Grupo'}>
                 <div className="space-y-4">
                     <Input label="Nome" name="nome" value={currentGrupo.nome || ''} onChange={handleChange} />

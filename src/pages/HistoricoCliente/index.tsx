@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
+import { useAuth } from '../../hooks/useAuth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
-interface Cliente { id: number; nome: string; }
+interface Cliente { id: string; nome: string; }
 interface HistoricoItem {
-    os_numero: number;
+    os_numero: string;
     nome_cliente: string;
-    data_execucao: string;
+    data_execucao: { toDate: () => Date };
     nome_funcionario: string | null;
-    checklist_id: number | null;
+    checklist_id: string | null;
     has_checkin: boolean;
     has_checkout: boolean;
 }
@@ -18,6 +21,7 @@ interface HistoricoItem {
 const getISODate = (date: Date) => date.toISOString().split('T')[0];
 
 export default function HistoricoClientePage() {
+    const { user } = useAuth();
     const [historico, setHistorico] = useState<HistoricoItem[]>([]);
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [loading, setLoading] = useState(false);
@@ -29,17 +33,31 @@ export default function HistoricoClientePage() {
     const [clienteId, setClienteId] = useState('todos');
 
     useEffect(() => {
-        api.get('/usuarios/list').then(res => setClientes(res.data));
-    }, []);
+        // Busca a lista de clientes para o filtro
+        const fetchClientes = async () => {
+            if (!user) return;
+            const clientesRef = collection(db, 'usuarios');
+            // Idealmente, você buscaria apenas clientes que já interagiram com a sua empresa.
+            const snap = await getDocs(clientesRef);
+            setClientes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente)));
+        };
+        fetchClientes();
+    }, [user]);
 
     const fetchHistorico = useCallback(async () => {
         setLoading(true);
         try {
-            const params = { data_inicio: dataInicio, data_fim: dataFim, usuario_id: clienteId };
-            const response = await api.get('/relatorios/historico-cliente', { params });
+            const functions = getFunctions();
+            const getHistoricoCliente = httpsCallable(functions, 'getHistoricoCliente');
+            const response: any = await getHistoricoCliente({
+                data_inicio: dataInicio,
+                data_fim: dataFim,
+                usuario_id: clienteId === 'todos' ? null : clienteId
+            });
             setHistorico(response.data);
         } catch (error) {
             alert('Erro ao buscar histórico.');
+            console.error(error);
         } finally {
             setLoading(false);
         }
@@ -53,7 +71,6 @@ export default function HistoricoClientePage() {
         <div>
             <h1 className="text-4xl font-bold text-texto-principal mb-6">Histórico de Clientes</h1>
 
-            {/* ✅ SEÇÃO DE FILTROS MODERNIZADA */}
             <div className="bg-fundo-secundario p-4 rounded-lg shadow-sm mb-8 border border-borda">
                 <div className="flex flex-col md:flex-row items-end gap-4">
                     <div className="w-full md:w-auto">
@@ -79,7 +96,6 @@ export default function HistoricoClientePage() {
 
             <div className="bg-fundo-secundario rounded-lg shadow-sm overflow-hidden border border-borda">
                 <table className="w-full text-left">
-                    {/* ✅ CABEÇALHO DA TABELA REFINADO */}
                     <thead className="border-b border-borda bg-fundo-principal">
                         <tr>
                             <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">OS #</th>
@@ -99,14 +115,13 @@ export default function HistoricoClientePage() {
                                 <tr key={item.os_numero} className="hover:bg-fundo-principal">
                                     <td className="p-4 font-medium text-primaria-padrao">
                                         <Link to={`/ordem-de-servico/${item.os_numero}`} className="hover:underline">
-                                            #{String(item.os_numero).padStart(6, '0')}
+                                            #{String(item.os_numero).substring(0, 6)}
                                         </Link>
                                     </td>
                                     <td className="p-4 text-texto-principal">{item.nome_cliente}</td>
-                                    <td className="p-4 text-texto-secundario">{new Date(item.data_execucao).toLocaleDateString('pt-BR')}</td>
+                                    <td className="p-4 text-texto-secundario">{item.data_execucao.toDate().toLocaleDateString('pt-BR')}</td>
                                     <td className="p-4 text-texto-secundario">{item.nome_funcionario || 'N/A'}</td>
                                     <td className="p-4 space-x-2">
-                                        {/* ✅ BOTÕES MAIS COMPACTOS */}
                                         {item.has_checkin &&
                                             <Link to={`/checklist/${item.os_numero}`} state={{ modo: 'view' }}>
                                                 <Button variant="secondary" className="!py-1 !px-3 !text-xs !w-auto">Ver Check-in</Button>

@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, getDocs, addDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../../firebaseConfig';
 
 interface Empresa {
-    id: number;
+    id: string;
     nome_fantasia: string;
 }
 
 export default function SolicitarOrcamentoPage() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { user } = useAuth(); // Utilizador logado do Firebase
 
     const [empresas, setEmpresas] = useState<Empresa[]>([]);
     const [selectedEmpresa, setSelectedEmpresa] = useState('');
@@ -23,18 +27,20 @@ export default function SolicitarOrcamentoPage() {
     const [isEmpresaPreselected, setIsEmpresaPreselected] = useState(false);
 
     useEffect(() => {
+        const fetchEmpresas = async () => {
+            const empresasRef = collection(db, 'empresas');
+            const snapshot = await getDocs(empresasRef);
+            const listaEmpresas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Empresa));
+            setEmpresas(listaEmpresas);
+        };
+
         if (location.state?.empresaId) {
             const { empresaId, empresaNome } = location.state;
             setEmpresas([{ id: empresaId, nome_fantasia: empresaNome }]);
             setSelectedEmpresa(empresaId);
             setIsEmpresaPreselected(true);
         } else {
-            api.get('/empresas').then(response => {
-                setEmpresas(response.data);
-            }).catch(err => {
-                console.error("Erro ao carregar empresas", err);
-                setError("Não foi possível carregar a lista de lojas.");
-            });
+            fetchEmpresas().catch(err => setError("Não foi possível carregar a lista de lojas."));
         }
     }, [location.state]);
 
@@ -58,26 +64,40 @@ export default function SolicitarOrcamentoPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedEmpresa || !descricao) {
+        if (!user || !selectedEmpresa || !descricao) {
             setError("Por favor, selecione uma loja e descreva o que precisa.");
             return;
         }
         setLoading(true);
         setError('');
 
-        const formData = new FormData();
-        formData.append('empresa_id', selectedEmpresa);
-        formData.append('descricao', descricao);
-        formData.append('data_orcamento', new Date().toISOString());
-
-        imagens.forEach(imagem => {
-            formData.append('imagens', imagem);
-        });
-
         try {
-            await api.post('/orcamentos', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            // 1. Criar o documento do orçamento no Firestore
+            const orcamentoData = {
+                empresa_id: selectedEmpresa,
+                usuario_id: user.uid,
+                descricao: descricao,
+                data_orcamento: new Date(),
+                status: 'solicitado',
+                imagens: [] // Array que irá armazenar as URLs das imagens
+            };
+
+            const docRef = await addDoc(collection(db, 'orcamentos'), orcamentoData);
+
+            // 2. Fazer o upload das imagens para o Cloud Storage
+            const imageUrls: string[] = [];
+            for (const imagem of imagens) {
+                const imageRef = ref(storage, `orcamentos/${docRef.id}/${imagem.name}`);
+                const snapshot = await uploadBytes(imageRef, imagem);
+                const downloadURL = await getDownloadURL(snapshot.ref);
+                imageUrls.push(downloadURL);
+            }
+
+            // 3. Atualizar o documento do orçamento com as URLs das imagens
+            if (imageUrls.length > 0) {
+                await updateDoc(docRef, { imagens: imageUrls });
+            }
+
             alert('Orçamento solicitado com sucesso!');
             navigate('/meus-orcamentos');
         } catch (err) {
@@ -91,14 +111,14 @@ export default function SolicitarOrcamentoPage() {
     return (
         <div>
             <h1 className="text-3xl font-bold mb-6 text-texto-principal">Solicitar Novo Orçamento</h1>
-            <div className="max-w-2xl bg-fundo-secundario p-8 rounded-lg shadow-sm border border-borda">
+            <div className="max-w-2xl bg-fundo-secundario p-8 rounded-lg shadow-md border border-borda">
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
                         <label className="text-sm font-semibold text-texto-secundario block mb-2">Para qual loja é o orçamento?</label>
                         <select
                             value={selectedEmpresa}
                             onChange={e => setSelectedEmpresa(e.target.value)}
-                            className="w-full px-4 py-3 bg-white border border-borda rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed text-texto-principal"
+                            className="w-full px-4 py-3 bg-white border border-borda rounded-lg disabled:bg-gray-200 disabled:cursor-not-allowed text-texto-principal"
                             required
                             disabled={isEmpresaPreselected}
                         >
@@ -116,14 +136,13 @@ export default function SolicitarOrcamentoPage() {
                             onChange={e => setDescricao(e.target.value)}
                             rows={6}
                             className="w-full px-4 py-3 bg-white border border-borda rounded-lg text-texto-principal"
-                            placeholder="Ex: Gostaria de um orçamento para instalar película nos vidros..."
+                            placeholder="Ex: Gostaria de um orçamento para instalar película nos vidros de um Honda Civic 2022 e fazer um polimento completo."
                             required
                         />
                     </div>
 
                     <div>
                         <label className="text-sm font-semibold text-texto-secundario block mb-2">Anexar Imagens (até 5)</label>
-                        {/* ✅ MENSAGEM ADICIONADA AQUI */}
                         <p className="text-xs text-texto-secundario mb-3">Coloque as imagens do seu carro para agilizar o seu orçamento.</p>
                         <input
                             type="file"

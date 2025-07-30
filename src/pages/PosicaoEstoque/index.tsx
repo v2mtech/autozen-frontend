@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import * as XLSX from 'xlsx';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface PosicaoEstoqueItem {
     codigo_interno: string;
@@ -18,7 +18,10 @@ export default function PosicaoEstoquePage() {
         const fetchPosicao = async () => {
             setLoading(true);
             try {
-                const response = await api.get('/relatorios/posicao-estoque');
+                // Esta consulta complexa (com join) deve ser uma Cloud Function
+                const functions = getFunctions();
+                const getPosicaoEstoque = httpsCallable(functions, 'getPosicaoEstoque');
+                const response: any = await getPosicaoEstoque();
                 setPosicao(response.data);
             } catch (error) {
                 alert('Erro ao carregar a posição do estoque.');

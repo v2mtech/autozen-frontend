@@ -1,30 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import SignatureCanvas from 'react-signature-canvas';
 import CarDiagram from './CarDiagram';
 import { Input } from '../../components/Input';
+import { useAuth } from '../../hooks/useAuth';
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../../firebaseConfig';
 
 // --- INTERFACES ---
 interface Avaria {
-    id?: number;
+    id?: string;
     pos_x: number;
     pos_y: number;
     descricao: string;
     foto_url?: string;
 }
 interface ItemVerificado {
-    id?: number; // ID pode não existir para novos itens
+    id?: string;
     nome_item: string;
     estado_checkin: string;
     estado_checkout: string | null;
 }
 interface ChecklistData {
-    id: number;
-    data_checkin: string;
-    data_checkout: string | null;
-    quilometragem: number | null; // ✅ Campo adicionado
+    id: string;
+    data_checkin: { toDate: () => Date }; // ✅ Campo Corrigido
+    data_checkout: { toDate: () => Date } | null; // ✅ Campo Adicionado
+    quilometragem: number | null;
     assinatura_cliente_checkin: string;
     assinatura_cliente_checkout: string | null;
     observacoes_checkin: string;
@@ -35,6 +38,7 @@ interface ChecklistData {
 
 export default function ChecklistPage() {
     const { agendamentoId } = useParams<{ agendamentoId: string }>();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -55,15 +59,17 @@ export default function ChecklistPage() {
 
     useEffect(() => {
         const modoInicial = location.state?.modo || 'checkin';
-
         const fetchChecklist = async () => {
+            if (!agendamentoId || !user) return;
             try {
-                const response = await api.get(`/checklist/agendamento/${agendamentoId}`);
-                const data = response.data;
-                if (data) {
+                const q = query(collection(db, 'checklist_veiculo'), where("agendamento_id", "==", agendamentoId));
+                const snapshot = await getDocs(q);
+                if (!snapshot.empty) {
+                    const doc = snapshot.docs[0];
+                    const data = { id: doc.id, ...doc.data() } as ChecklistData;
                     setChecklist(data);
-                    setAvarias(data.avarias);
-                    setItens(data.itens);
+                    setAvarias(data.avarias || []);
+                    setItens(data.itens || []);
                     setQuilometragem(data.quilometragem?.toString() || '');
                     if (modoInicial === 'checkout' && !data.data_checkout) {
                         setObservacoes(data.observacoes_checkout || '');
@@ -75,20 +81,16 @@ export default function ChecklistPage() {
                 } else {
                     setModo('checkin');
                 }
-            } catch (error) {
-                console.error("Erro ao buscar checklist", error);
-            } finally {
-                setLoading(false);
-            }
+            } catch (error) { console.error("Erro ao buscar checklist", error); }
+            finally { setLoading(false); }
         };
         fetchChecklist();
-    }, [agendamentoId, location.state]);
+    }, [agendamentoId, user, location.state]);
 
     const handleDiagramClick = (e: React.MouseEvent<HTMLImageElement>) => {
         if (modo !== 'checkin') return;
         const descricao = prompt("Descreva a avaria (ex: Risco, Mossa):");
         if (!descricao) return;
-
         const rect = e.currentTarget.getBoundingClientRect();
         const posX = ((e.clientX - rect.left) / rect.width) * 100;
         const posY = ((e.clientY - rect.top) / rect.height) * 100;
@@ -106,45 +108,56 @@ export default function ChecklistPage() {
     };
 
     const handleSave = async () => {
+        if (!user || !agendamentoId) return;
         if (modo !== 'view' && sigCanvas.current?.isEmpty()) {
             alert("A assinatura do cliente é obrigatória.");
             return;
         }
         setLoading(true);
-        const assinatura = sigCanvas.current?.toDataURL('image/png');
+        const assinaturaDataUrl = sigCanvas.current?.toDataURL('image/png');
 
-        if (modo === 'checkin') {
-            try {
-                const payload = {
+        try {
+            if (modo === 'checkin') {
+                const sigRef = ref(storage, `checklists/${agendamentoId}/assinatura_checkin.png`);
+                await uploadString(sigRef, assinaturaDataUrl!, 'data_url');
+                const assinaturaUrl = await getDownloadURL(sigRef);
+
+                await setDoc(doc(db, 'checklist_veiculo', agendamentoId), {
                     agendamento_id: agendamentoId,
-                    itens_verificados: itens,
-                    assinatura_cliente_checkin: assinatura,
+                    empresa_id: user.uid,
+                    quilometragem: quilometragem ? parseInt(quilometragem) : null,
+                    assinatura_cliente_checkin: assinaturaUrl,
                     observacoes_checkin: observacoes,
-                    quilometragem: quilometragem ? parseInt(quilometragem) : null
-                };
-                const checklistRes = await api.post('/checklist/checkin', payload);
-                const checklistId = checklistRes.data.id;
-
-                for (const avaria of avarias) {
-                    await api.post('/checklist/avaria', { ...avaria, checklist_id: checklistId });
-                }
+                    itens: itens,
+                    avarias: avarias,
+                    data_checkin: new Date(),
+                    data_checkout: null,
+                    assinatura_cliente_checkout: null,
+                    observacoes_checkout: null
+                });
                 alert('Check-in realizado com sucesso!');
                 navigate(`/ordem-de-servico/${agendamentoId}`);
-            } catch (error) { alert('Erro ao guardar o check-in.'); }
+            } else if (modo === 'checkout' && checklist) {
+                const sigRef = ref(storage, `checklists/${agendamentoId}/assinatura_checkout.png`);
+                await uploadString(sigRef, assinaturaDataUrl!, 'data_url');
+                const assinaturaUrl = await getDownloadURL(sigRef);
 
-        } else if (modo === 'checkout') {
-            try {
-                await api.post('/checklist/checkout', {
-                    checklist_id: checklist?.id,
-                    itens_verificados: itens,
-                    assinatura_cliente_checkout: assinatura,
-                    observacoes_checkout: observacoes
+                const checklistRef = doc(db, 'checklist_veiculo', checklist.id);
+                await updateDoc(checklistRef, {
+                    data_checkout: new Date(),
+                    assinatura_cliente_checkout: assinaturaUrl,
+                    observacoes_checkout: observacoes,
+                    itens: itens,
                 });
                 alert('Check-out realizado com sucesso!');
                 navigate(`/ordem-de-servico/${agendamentoId}`);
-            } catch (error) { alert('Erro ao guardar o check-out.'); }
+            }
+        } catch (error) {
+            console.error("Erro ao salvar:", error);
+            alert(`Erro ao guardar o ${modo}.`);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     if (loading) return <p className="text-center text-texto-secundario">A carregar...</p>;
@@ -152,9 +165,9 @@ export default function ChecklistPage() {
     return (
         <div>
             <h1 className="text-4xl font-bold mb-6 text-texto-principal">
-                {modo === 'checkin' && `Check-in do Veículo - OS #${agendamentoId}`}
-                {modo === 'checkout' && `Check-out do Veículo - OS #${agendamentoId}`}
-                {modo === 'view' && `Relatório de Vistoria - OS #${agendamentoId}`}
+                {modo === 'checkin' && `Check-in do Veículo - OS #${agendamentoId?.substring(0, 6)}`}
+                {modo === 'checkout' && `Check-out do Veículo - OS #${agendamentoId?.substring(0, 6)}`}
+                {modo === 'view' && `Relatório de Vistoria - OS #${agendamentoId?.substring(0, 6)}`}
             </h1>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-fundo-secundario p-6 rounded-lg shadow-sm border border-borda">
@@ -168,12 +181,10 @@ export default function ChecklistPage() {
                         ))}
                     </div>
                 </div>
-
                 <div className="space-y-6">
                     <div className="bg-fundo-secundario p-6 rounded-lg shadow-sm border border-borda">
                         <h2 className="text-xl font-bold mb-4 text-texto-principal">Itens Verificados</h2>
                         <div className="space-y-3">
-                            {/* ✅ CAMPO DE QUILOMETRAGEM ADICIONADO */}
                             <Input label="Quilometragem (KM)" type="number" value={quilometragem} onChange={e => setQuilometragem(e.target.value)} disabled={modo !== 'checkin'} />
                             <div className="grid grid-cols-3 items-center gap-4 font-bold text-texto-secundario pt-2"><span className="col-span-1">Item</span><span>Check-in</span><span>Check-out</span></div>
                             {itens.map((item, index) => (

@@ -1,34 +1,34 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api from '../../services/api';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { regimesTributarios } from '../../data/fiscalData';
+import { useAuth } from '../../hooks/useAuth';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../../firebaseConfig';
 
+// ✅ INÍCIO DA CORREÇÃO: Interface completada com todos os campos do formulário
 interface EmpresaProfile {
-  id: number;
+  id: string; // UID do Firebase
   nome_empresa: string;
   nome_fantasia: string;
   email: string;
-  telefone: string;
-  endereco_rua_numero: string;
-  endereco_cidade: string;
-  endereco_estado: string;
-  cep: string;
-  endereco_bairro: string;
-  complemento: string | null;
-  cnpj: string;
-  nome_responsavel: string;
-  tel_responsavel: string;
   logo_url?: string;
-  inscricao_estadual: string | null;
-  inscricao_municipal: string | null;
-  regime_tributario: string | null;
+  cnpj?: string;
+  inscricao_estadual?: string;
+  inscricao_municipal?: string;
+  regime_tributario?: string;
+  telefone?: string;
+  nome_responsavel?: string;
+  tel_responsavel?: string;
+  cep?: string;
+  endereco_rua_numero?: string;
+  endereco_bairro?: string;
+  complemento?: string;
+  endereco_cidade?: string;
+  endereco_estado?: string;
 }
-
-interface UpdateResponse {
-  message: string;
-  logo_url?: string;
-}
+// ✅ FIM DA CORREÇÃO
 
 const LogoPlaceholder = () => (
   <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 border border-borda">
@@ -39,6 +39,7 @@ const LogoPlaceholder = () => (
 );
 
 export default function EditarEmpresaPage() {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<Partial<EmpresaProfile>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -49,17 +50,29 @@ export default function EditarEmpresaPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    api.get<EmpresaProfile>('/empresas/profile').then(response => {
-      setFormData(response.data);
-      if (response.data.logo_url) {
-        setPreview(`http://localhost:3333${response.data.logo_url}`);
+    const fetchProfile = async () => {
+      if (!user) return;
+      setLoading(true);
+      try {
+        const docRef = doc(db, "empresas", user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data() as EmpresaProfile;
+          setFormData(data);
+          if (data.logo_url) {
+            setPreview(data.logo_url);
+          }
+        } else {
+          setError("Perfil da empresa não encontrado.");
+        }
+      } catch (err) {
+        setError("Não foi possível carregar os dados da empresa.");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }).catch(err => {
-      setError("Não foi possível carregar os dados da empresa.");
-      setLoading(false);
-    });
-  }, []);
+    };
+    fetchProfile();
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -79,32 +92,29 @@ export default function EditarEmpresaPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+
     setLoading(true);
     setError('');
     setSuccess('');
 
-    const data = new FormData();
-    Object.keys(formData).forEach(key => {
-      const value = (formData as any)[key];
-      if (key !== 'logo_url' && value !== null && value !== undefined) {
-        data.append(key, value);
-      }
-    });
-    if (logoFile) {
-      data.append('logo', logoFile);
-    }
-
     try {
-      const response = await api.put<UpdateResponse>('/empresas/profile', data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      let logoUrl = formData.logo_url || '';
+
+      if (logoFile) {
+        const logoRef = ref(storage, `logos_empresas/${user.uid}/${logoFile.name}`);
+        const snapshot = await uploadBytes(logoRef, logoFile);
+        logoUrl = await getDownloadURL(snapshot.ref);
+      }
+
+      const { id, ...dataToUpdate } = formData;
+
+      const empresaRef = doc(db, "empresas", user.uid);
+      await updateDoc(empresaRef, { ...dataToUpdate, logo_url: logoUrl });
 
       setSuccess('Perfil atualizado com sucesso!');
-      if (response.data.logo_url) {
-        setPreview(`http://localhost:3333${response.data.logo_url}?t=${new Date().getTime()}`);
-      }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao atualizar perfil.');
+      setError('Erro ao atualizar perfil.');
     } finally {
       setLoading(false);
     }
@@ -121,7 +131,7 @@ export default function EditarEmpresaPage() {
 
         <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-center gap-4">
           <p className="text-sm font-semibold text-blue-800">ID da sua Loja para login de funcionários:</p>
-          <p className="text-lg font-bold font-mono bg-blue-100 text-blue-900 px-3 py-1 rounded">{formData.id}</p>
+          <p className="text-lg font-bold font-mono bg-blue-100 text-blue-900 px-3 py-1 rounded">{user?.uid}</p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-6">
@@ -148,14 +158,14 @@ export default function EditarEmpresaPage() {
               name="regime_tributario"
               value={formData.regime_tributario || ''}
               onChange={handleChange}
-              className="w-full px-4 py-3 bg-white border border-borda rounded-lg focus:ring-2 focus:ring-primaria-escuro focus:outline-none transition duration-200"
+              className="w-full px-4 py-3 bg-white border border-borda rounded-lg"
             >
               {regimesTributarios.map(regime => (
                 <option key={regime.valor} value={regime.valor}>{regime.nome}</option>
               ))}
             </select>
           </div>
-          <Input label="E-mail de Acesso" type="email" name="email" value={formData.email || ''} onChange={handleChange} required />
+          <Input label="E-mail de Acesso" type="email" name="email" value={formData.email || ''} onChange={handleChange} required disabled />
           <Input label="Telefone Comercial" name="telefone" value={formData.telefone || ''} onChange={handleChange} />
           <Input label="Nome do Responsável" name="nome_responsavel" value={formData.nome_responsavel || ''} onChange={handleChange} />
           <Input label="Telefone do Responsável" name="tel_responsavel" value={formData.tel_responsavel || ''} onChange={handleChange} />

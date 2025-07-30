@@ -1,62 +1,93 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../../services/api';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import { EventClickArg } from '@fullcalendar/core';
 import ptBrLocale from '@fullcalendar/core/locales/pt-br';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
 // Interfaces
-interface Funcionario { id: number; nome: string; }
-interface FormaPagamento { id: number; nome: string; }
-interface CondicaoPagamento { id: number; nome: string; }
+interface Funcionario { id: string; nome: string; }
 interface CalendarEvent {
     id: string;
+    title: string;
+    start: Date;
+    end: Date;
+    color: string;
     extendedProps: {
-        status: 'agendado' | 'em andamento' | 'concluido' | 'cancelado';
-        [key: string]: any;
+        status: string;
+        cliente: string;
+        servicos: string;
+        funcionario_id: string | null;
+        cliente_telefone: string | null;
     };
-    [key: string]: any;
 }
 interface AgendamentoEditavel {
     id: string;
-    status: 'agendado' | 'em andamento' | 'concluido' | 'cancelado';
-    [key: string]: any;
+    status: string;
+    cliente: string;
+    servicos: string;
+    funcionario_id: string | null;
+    start: string;
 }
 
 export default function AgendaPage() {
+    const { user } = useAuth();
     const [agendamentos, setAgendamentos] = useState<CalendarEvent[]>([]);
     const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
-    const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
-    const [condicoesPagamento, setCondicoesPagamento] = useState<CondicaoPagamento[]>([]);
-    const [selectedFormaPagamento, setSelectedFormaPagamento] = useState<string>('');
-    const [selectedCondicaoPagamento, setSelectedCondicaoPagamento] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [agendamentoParaEditar, setAgendamentoParaEditar] = useState<AgendamentoEditavel | null>(null);
     const [isEditable, setIsEditable] = useState(false);
 
     const fetchPageData = useCallback(async () => {
+        if (!user) return;
         setLoading(true);
         try {
-            const [agendaRes, funcRes, formasRes, condicoesRes] = await Promise.all([
-                api.get<CalendarEvent[]>('/agendamentos'),
-                api.get<Funcionario[]>('/funcionarios'),
-                api.get<FormaPagamento[]>('/formas-pagamento'),
-                api.get<CondicaoPagamento[]>('/condicoes-pagamento')
-            ]);
-            setAgendamentos(agendaRes.data);
-            setFuncionarios(funcRes.data);
-            setFormasPagamento(formasRes.data);
-            setCondicoesPagamento(condicoesRes.data);
+            // Busca Agendamentos
+            const agendaRef = collection(db, 'agendamentos');
+            const qAgenda = query(agendaRef, where("empresa_id", "==", user.uid));
+            const agendaSnap = await getDocs(qAgenda);
+            const agendaList = agendaSnap.docs.map(doc => {
+                const data = doc.data();
+                const statusColors: { [key: string]: string } = {
+                    agendado: '#f59e0b', 'em andamento': '#3b82f6', 'concluido': '#22c55e',
+                    'cancelado': '#ef4444', 'aguardando cliente': '#8b5cf6', 'aguardando peça': '#eab308'
+                };
+                return {
+                    id: doc.id,
+                    title: `${data.usuario_nome} - ${data.funcionario_nome || 'Sem funcionário'}`,
+                    start: data.data_hora_inicio.toDate(),
+                    end: data.data_hora_fim.toDate(),
+                    color: statusColors[data.status] || '#6b7280',
+                    extendedProps: {
+                        status: data.status,
+                        cliente: data.usuario_nome,
+                        servicos: data.servicos_nomes || 'N/A',
+                        funcionario_id: data.funcionario_id || null,
+                        cliente_telefone: data.usuario_telefone || null,
+                    }
+                } as CalendarEvent;
+            });
+            setAgendamentos(agendaList);
+
+            // Busca Funcionários
+            const funcRef = collection(db, 'funcionarios');
+            const qFunc = query(funcRef, where("empresa_id", "==", user.uid));
+            const funcSnap = await getDocs(qFunc);
+            const funcList = funcSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Funcionario));
+            setFuncionarios(funcList);
+
         } catch (err) {
             console.error("Erro ao carregar dados da agenda:", err);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         fetchPageData();
@@ -65,9 +96,9 @@ export default function AgendaPage() {
     const handleEventClick = (clickInfo: EventClickArg) => {
         const { id, start, extendedProps } = clickInfo.event;
         const statusInicial = extendedProps.status;
-        
+
         setIsEditable(statusInicial !== 'concluido' && statusInicial !== 'cancelado');
-        
+
         setAgendamentoParaEditar({
             id,
             cliente: extendedProps.cliente,
@@ -76,43 +107,32 @@ export default function AgendaPage() {
             funcionario_id: extendedProps.funcionario_id || '',
             start: new Date(start || Date.now()).toLocaleString('pt-BR'),
         });
-        setSelectedFormaPagamento('');
-        setSelectedCondicaoPagamento('');
         setIsModalOpen(true);
     };
 
     const handleSaveChanges = async () => {
-        if (!agendamentoParaEditar) return;
-        if (agendamentoParaEditar.status === 'concluido' && (!selectedFormaPagamento || !selectedCondicaoPagamento)) {
-            alert('Para concluir, por favor, selecione a Forma e a Condição de Pagamento.');
-            return;
-        }
+        if (!agendamentoParaEditar || !isEditable) return;
 
         try {
-            const statusPayload: any = { status: agendamentoParaEditar.status };
-            if (agendamentoParaEditar.status === 'concluido') {
-                statusPayload.forma_pagamento_id = selectedFormaPagamento;
-                statusPayload.condicao_pagamento_id = selectedCondicaoPagamento;
-            }
-            await api.patch(`/agendamentos/${agendamentoParaEditar.id}/status`, statusPayload);
-            
-            if (isEditable) {
-                await api.patch(`/agendamentos/${agendamentoParaEditar.id}/funcionario`, { funcionario_id: agendamentoParaEditar.funcionario_id });
-            }
+            const agendamentoRef = doc(db, 'agendamentos', agendamentoParaEditar.id);
+            await updateDoc(agendamentoRef, {
+                status: agendamentoParaEditar.status,
+                funcionario_id: agendamentoParaEditar.funcionario_id || null
+            });
 
             setIsModalOpen(false);
-            fetchPageData();
+            fetchPageData(); // Recarrega os eventos
         } catch (err: any) {
-            alert(err.response?.data?.error || 'Erro ao guardar as alterações.');
+            alert('Erro ao guardar as alterações.');
         }
     };
 
-    if (loading) return <p className="text-center text-gray-400">A carregar agenda...</p>;
+    if (loading) return <p className="text-center text-texto-secundario">A carregar agenda...</p>;
 
     return (
         <div>
-            <h1 className="text-4xl font-bold mb-6">Agenda Visual</h1>
-            <div className="bg-fundo-secundario rounded-lg p-4 shadow-lg text-texto-principal">
+            <h1 className="text-4xl font-bold text-texto-principal mb-6">Agenda Visual</h1>
+            <div className="bg-fundo-secundario rounded-lg p-4 shadow-sm text-texto-principal border border-borda">
                 <FullCalendar
                     plugins={[dayGridPlugin]} initialView="dayGridMonth" locale={ptBrLocale}
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,dayGridWeek,dayGridDay' }}
@@ -121,47 +141,27 @@ export default function AgendaPage() {
                 />
             </div>
             {agendamentoParaEditar && (
-                <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`Agendamento #${agendamentoParaEditar.id}`}>
+                <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`Agendamento #${agendamentoParaEditar.id.substring(0, 6)}`}>
                     <div className="space-y-4 text-texto-principal">
                         <p><strong>Cliente:</strong> {agendamentoParaEditar.cliente}</p>
                         <p><strong>Serviços:</strong> {agendamentoParaEditar.servicos}</p>
                         <hr className="border-borda" />
                         <div>
-                            <label className="block text-sm font-semibold mb-2">Associar Funcionário</label>
-                            <select value={agendamentoParaEditar.funcionario_id} onChange={e => setAgendamentoParaEditar({ ...agendamentoParaEditar, funcionario_id: e.target.value })} disabled={!isEditable} className="w-full p-2 border rounded-lg bg-white disabled:bg-gray-200 disabled:cursor-not-allowed">
+                            <label className="block text-sm font-semibold mb-2 text-texto-secundario">Associar Funcionário</label>
+                            <select value={agendamentoParaEditar.funcionario_id || ''} onChange={e => setAgendamentoParaEditar({ ...agendamentoParaEditar, funcionario_id: e.target.value })} disabled={!isEditable} className="w-full p-2 border rounded-lg bg-white text-texto-principal disabled:bg-gray-200 disabled:cursor-not-allowed">
                                 <option value="">Nenhum</option>
                                 {funcionarios.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold mb-2">Alterar Status</label>
-                            <select value={agendamentoParaEditar.status} onChange={e => setAgendamentoParaEditar({ ...agendamentoParaEditar, status: e.target.value as any })} disabled={!isEditable} className="w-full p-2 border rounded-lg bg-white disabled:bg-gray-200 disabled:cursor-not-allowed">
+                            <label className="block text-sm font-semibold mb-2 text-texto-secundario">Alterar Status</label>
+                            <select value={agendamentoParaEditar.status} onChange={e => setAgendamentoParaEditar({ ...agendamentoParaEditar, status: e.target.value as any })} disabled={!isEditable} className="w-full p-2 border rounded-lg bg-white text-texto-principal disabled:bg-gray-200 disabled:cursor-not-allowed">
                                 <option value="agendado">Agendado</option>
                                 <option value="em andamento">Em Andamento</option>
                                 <option value="concluido">Concluído</option>
                                 <option value="cancelado" disabled>Cancelado</option>
                             </select>
                         </div>
-                        
-                        {/* CORREÇÃO APLICADA AQUI */}
-                        {(agendamentoParaEditar.status === 'concluido') && isEditable && (
-                            <div className="space-y-4 border-t border-borda pt-4 mt-4">
-                                <div>
-                                    <label className="block text-sm font-semibold mb-2">Forma de Pagamento</label>
-                                    <select value={selectedFormaPagamento} onChange={e => setSelectedFormaPagamento(e.target.value)} className="w-full p-2 border rounded-lg bg-white">
-                                        <option value="">Selecione...</option>
-                                        {formasPagamento.map(fp => <option key={fp.id} value={fp.id}>{fp.nome}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold mb-2">Condição de Pagamento</label>
-                                    <select value={selectedCondicaoPagamento} onChange={e => setSelectedCondicaoPagamento(e.target.value)} className="w-full p-2 border rounded-lg bg-white">
-                                        <option value="">Selecione...</option>
-                                        {condicoesPagamento.map(cp => <option key={cp.id} value={cp.id}>{cp.nome}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                        )}
                     </div>
                     <div className="flex justify-end items-center gap-4 pt-6 mt-4 border-t border-borda">
                         <Link to={`/ordem-de-servico/${agendamentoParaEditar.id}`}>

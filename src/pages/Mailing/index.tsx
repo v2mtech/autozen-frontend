@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import * as XLSX from 'xlsx';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface ClienteMailing {
     nome: string;
@@ -18,7 +18,9 @@ export default function MailingPage() {
         const fetchMailing = async () => {
             setLoading(true);
             try {
-                const response = await api.get<ClienteMailing[]>('/relatorios/mailing-clientes');
+                const functions = getFunctions();
+                const getMailingClientes = httpsCallable(functions, 'getMailingClientes');
+                const response: any = await getMailingClientes();
                 setClientes(response.data);
             } catch (error) {
                 alert('Não foi possível carregar a lista de clientes.');
@@ -34,19 +36,15 @@ export default function MailingPage() {
             alert('Não há clientes para exportar.');
             return;
         }
-
         const dadosFormatados = clientes.map(cliente => ({
-            'Nome': cliente.nome,
-            'Email': cliente.email,
-            'Telefone': cliente.telefone || 'N/A',
-            'CPF': cliente.cpf || 'N/A'
+            'Nome': cliente.nome, 'Email': cliente.email,
+            'Telefone': cliente.telefone || 'N/A', 'CPF': cliente.cpf || 'N/A'
         }));
-
         const worksheet = XLSX.utils.json_to_sheet(dadosFormatados);
         worksheet['!cols'] = [{ wch: 35 }, { wch: 35 }, { wch: 20 }, { wch: 20 }];
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Mailing Clientes');
-        XLSX.writeFile(workbook, `mailing-clientes-${new Date().toLocaleDateString('pt-BR')}.xlsx`);
+        XLSX.writeFile(workbook, `mailing-clientes.xlsx`);
     };
 
     return (

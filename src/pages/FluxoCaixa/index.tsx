@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Line } from 'react-chartjs-2';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface FluxoData {
     receitas: { dia: string, total: number }[];
@@ -22,11 +22,13 @@ export default function FluxoCaixaPage() {
     const fetchFluxo = useCallback(async () => {
         setLoading(true);
         try {
-            const params = { data_inicio: dataInicio, data_fim: dataFim };
-            const response = await api.get('/relatorios/fluxo-caixa', { params });
+            const functions = getFunctions();
+            const getFluxoCaixa = httpsCallable(functions, 'getFluxoCaixa');
+            const response: any = await getFluxoCaixa({ data_inicio: dataInicio, data_fim: dataFim });
             setFluxoData(response.data);
         } catch (error) {
             alert('Erro ao buscar fluxo de caixa.');
+            console.error("Erro ao chamar Cloud Function getFluxoCaixa:", error);
         } finally {
             setLoading(false);
         }
@@ -37,29 +39,38 @@ export default function FluxoCaixaPage() {
     }, [fetchFluxo]);
 
     const chartLabels = Array.from(new Set([
-        ...(fluxoData?.receitas.map(r => new Date(r.dia).toLocaleDateString('pt-BR')) || []),
-        ...(fluxoData?.despesas.map(d => new Date(d.dia).toLocaleDateString('pt-BR')) || [])
-    ])).sort();
+        ...(fluxoData?.receitas.map(r => new Date(r.dia).toLocaleDateString('pt-BR', { timeZone: 'UTC' })) || []),
+        ...(fluxoData?.despesas.map(d => new Date(d.dia).toLocaleDateString('pt-BR', { timeZone: 'UTC' })) || [])
+    ])).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
     const chartData = {
         labels: chartLabels,
         datasets: [
-            { label: 'Receitas (R$)', data: chartLabels.map(label => fluxoData?.receitas.find(r => new Date(r.dia).toLocaleDateString('pt-BR') === label)?.total || 0), backgroundColor: '#10B981', borderColor: '#10B981' },
-            { label: 'Despesas (R$)', data: chartLabels.map(label => fluxoData?.despesas.find(d => new Date(d.dia).toLocaleDateString('pt-BR') === label)?.total || 0), backgroundColor: '#EF4444', borderColor: '#EF4444' }
+            { label: 'Receitas (R$)', data: chartLabels.map(label => fluxoData?.receitas.find(r => new Date(r.dia).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) === label)?.total || 0), backgroundColor: '#08807b', borderColor: '#08807b' },
+            { label: 'Despesas (R$)', data: chartLabels.map(label => fluxoData?.despesas.find(d => new Date(d.dia).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) === label)?.total || 0), backgroundColor: '#fc036c', borderColor: '#fc036c' }
         ]
     };
 
     return (
         <div>
-            <h1 className="text-4xl font-bold mb-6">Relatório de Fluxo de Caixa</h1>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 p-4 bg-fundo-secundario rounded-lg">
-                <Input label="Data de Início" type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
-                <Input label="Data de Fim" type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
-                <div className="flex items-end"><Button onClick={fetchFluxo} disabled={loading}>{loading ? 'A calcular...' : 'Aplicar Filtros'}</Button></div>
+            <h1 className="text-4xl font-bold text-texto-principal mb-6">Relatório de Fluxo de Caixa</h1>
+            <div className="bg-fundo-secundario p-4 rounded-lg shadow-sm mb-8 border border-borda">
+                <div className="flex flex-col md:flex-row items-end gap-4">
+                    <div className="w-full md:w-auto">
+                        <Input label="Data de Início" type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
+                    </div>
+                    <div className="w-full md:w-auto">
+                        <Input label="Data de Fim" type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
+                    </div>
+                    <div className="flex-grow"></div>
+                    <div className="w-full md:w-auto">
+                        <Button onClick={fetchFluxo} disabled={loading}>{loading ? 'A calcular...' : 'Aplicar Filtros'}</Button>
+                    </div>
+                </div>
             </div>
 
-            <div className="bg-fundo-secundario p-6 rounded-lg shadow-lg">
-                <h2 className="text-xl font-bold text-white mb-4">Receitas vs. Despesas no Período</h2>
+            <div className="bg-fundo-secundario p-6 rounded-lg shadow-sm border border-borda">
+                <h2 className="text-xl font-bold text-texto-principal mb-4">Receitas vs. Despesas no Período</h2>
                 {fluxoData && <Line data={chartData} />}
             </div>
         </div>

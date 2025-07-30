@@ -17,7 +17,6 @@ import CadastroUsuarioPage from '../pages/CadastroUsuario';
 import DashboardPage from '../pages/Dashboard';
 import ServicosPage from '../pages/Servicos';
 import AgendaPage from '../pages/Agenda';
-
 import OrdemDeServicoEmpresaPage from '../pages/OrdemDeServicoEmpresa';
 import CashbackPage from '../pages/Cashback';
 import EditarEmpresaPage from '../pages/EditarEmpresa';
@@ -34,6 +33,7 @@ import FormasPagamentoPage from '../pages/FormasPagamento';
 import CondicoesPagamentoPage from '../pages/CondicoesPagamento';
 import OrcamentosKanbanPage from '../pages/OrcamentosKanban';
 import OrcamentoDetalhePage from '../pages/OrcamentoDetalhe';
+import ManuaisPage from '../pages/Manuais';
 
 // Páginas do Cliente
 import HomeUsuarioPage from '../pages/HomeUsuario';
@@ -64,13 +64,24 @@ import ContasPagarPage from '../pages/ContasPagar';
 import ContasReceberPage from '../pages/ContasReceber';
 import FluxoCaixaPage from '../pages/FluxoCaixa';
 import PerfisFuncionariosPage from '../pages/PerfisFuncionarios';
-import ManuaisPage from '../pages/Manuais';
 import EntradaNotaPage from '../pages/EntradaNota';
 
+
+// ✅ ROTA PROTEGIDA REFATORADA PARA FIREBASE
 function ProtectedRoute({ allowedRoles }: { allowedRoles: string[] }) {
-  const { userType, token, loading } = useAuth();
-  if (loading) return <div>A carregar...</div>;
-  if (!token) return <Navigate to="/login" replace />;
+  const { user, userType, loading } = useAuth();
+
+  if (loading) {
+    // Mostra uma tela de carregamento enquanto o Firebase verifica a autenticação
+    return <div>A verificar autenticação...</div>;
+  }
+
+  // Se não houver utilizador, redireciona para o login
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Se o tipo de utilizador tiver permissão, mostra a página, senão redireciona
   return allowedRoles.includes(userType || '') ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
@@ -85,8 +96,6 @@ export function AppRouter() {
         <Route path="/cadastro/usuario" element={<CadastroUsuarioPage />} />
       </Route>
 
-      {/* ✅ CORREÇÃO APLICADA AQUI ✅ */}
-      {/* Adicionado 'funcionario' à lista de perfis permitidos para aceder ao dashboard */}
       <Route element={<ProtectedRoute allowedRoles={['empresa', 'funcionario']} />}>
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -99,6 +108,7 @@ export function AppRouter() {
           <Route path="/servicos" element={<ServicosPage />} />
           <Route path="/produtos" element={<ProdutosPage />} />
           <Route path="/grupos" element={<GruposPage />} />
+          <Route path="/entrada-nota" element={<EntradaNotaPage />} />
           <Route path="/estoque" element={<EstoquePage />} />
           <Route path="/fornecedores" element={<FornecedoresPage />} />
           <Route path="/regras-fiscais" element={<RegrasFiscaisPage />} />
@@ -128,7 +138,6 @@ export function AppRouter() {
           <Route path="/fluxo-caixa" element={<FluxoCaixaPage />} />
           <Route path="/perfis-funcionarios" element={<PerfisFuncionariosPage />} />
           <Route path="/manuais" element={<ManuaisPage />} />
-          <Route path="/entrada-nota" element={<EntradaNotaPage />} />
         </Route>
       </Route>
 

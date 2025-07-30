@@ -1,25 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
 import { Input } from '../../components/Input';
+import { useAuth } from '../../hooks/useAuth';
+import { collection, query, where, getDocs, doc, addDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
-interface Fornecedor { id: number; nome_fantasia: string; }
+interface Fornecedor { id: string; nome_fantasia: string; }
 interface Conta {
-    id: number;
+    id: string;
     descricao: string;
-    fornecedor_id: number | null;
+    fornecedor_id: string | null;
     fornecedor_nome?: string;
     categoria: string;
     valor: number;
-    data_vencimento: string;
-    data_pagamento: string | null;
+    data_vencimento: any; // { toDate: () => Date } do Firestore
+    data_pagamento: any | null;
     status: 'Pendente' | 'Pago' | 'Atrasado';
 }
 
 const getISODate = (date: Date) => date.toISOString().split('T')[0];
 
 export default function ContasPagarPage() {
+    const { user } = useAuth();
     const [contas, setContas] = useState<Conta[]>([]);
     const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,14 +31,21 @@ export default function ContasPagarPage() {
     const [loading, setLoading] = useState(true);
 
     const fetchData = async () => {
+        if (!user) return;
         setLoading(true);
         try {
-            const [contasRes, fornecedoresRes] = await Promise.all([
-                api.get('/financeiro/contas-a-pagar'),
-                api.get('/fornecedores')
-            ]);
-            setContas(contasRes.data);
-            setFornecedores(fornecedoresRes.data);
+            // Busca contas a pagar da empresa logada
+            const contasRef = collection(db, 'contas_pagar');
+            const q = query(contasRef, where("empresa_id", "==", user.uid));
+            const contasSnap = await getDocs(q);
+            const contasList = contasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conta));
+            setContas(contasList);
+
+            // Busca fornecedores (assumindo que são globais por enquanto)
+            const fornecedoresRef = collection(db, 'fornecedores');
+            const fornSnap = await getDocs(fornecedoresRef);
+            const fornecedoresList = fornSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Fornecedor));
+            setFornecedores(fornecedoresList);
         } catch (error) {
             alert('Erro ao carregar dados.');
         } finally {
@@ -45,14 +55,14 @@ export default function ContasPagarPage() {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [user]);
 
     const handleOpenModal = (conta?: Conta) => {
         if (conta) {
             setCurrentConta({
                 ...conta,
-                data_vencimento: getISODate(new Date(conta.data_vencimento)),
-                data_pagamento: conta.data_pagamento ? getISODate(new Date(conta.data_pagamento)) : null
+                data_vencimento: getISODate(conta.data_vencimento.toDate()),
+                data_pagamento: conta.data_pagamento ? getISODate(conta.data_pagamento.toDate()) : null
             });
             setIsEditing(true);
         } else {
@@ -68,12 +78,22 @@ export default function ContasPagarPage() {
     };
 
     const handleSave = async () => {
+        if (!user) return;
         const { id, fornecedor_nome, ...data } = currentConta;
+
+        const dataToSave = {
+            ...data,
+            empresa_id: user.uid,
+            data_vencimento: new Date(data.data_vencimento),
+            data_pagamento: data.data_pagamento ? new Date(data.data_pagamento) : null
+        };
+
         try {
-            if (isEditing) {
-                await api.put(`/financeiro/contas-a-pagar/${id}`, data);
+            if (isEditing && id) {
+                const contaRef = doc(db, 'contas_pagar', id);
+                await updateDoc(contaRef, dataToSave);
             } else {
-                await api.post('/financeiro/contas-a-pagar', data);
+                await addDoc(collection(db, 'contas_pagar'), dataToSave);
             }
             fetchData();
             setIsModalOpen(false);
@@ -96,7 +116,6 @@ export default function ContasPagarPage() {
                     <thead className="border-b border-borda bg-fundo-principal">
                         <tr>
                             <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Descrição</th>
-                            <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Fornecedor</th>
                             <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Vencimento</th>
                             <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Valor</th>
                             <th className="p-4 text-sm font-semibold text-texto-secundario uppercase tracking-wider">Status</th>
@@ -106,8 +125,7 @@ export default function ContasPagarPage() {
                         {contas.map(conta => (
                             <tr key={conta.id} onClick={() => handleOpenModal(conta)} className="cursor-pointer hover:bg-fundo-principal">
                                 <td className="p-4 font-medium text-texto-principal">{conta.descricao}</td>
-                                <td className="p-4 text-texto-secundario">{conta.fornecedor_nome || 'Diversos'}</td>
-                                <td className="p-4 text-texto-secundario">{new Date(conta.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
+                                <td className="p-4 text-texto-secundario">{conta.data_vencimento.toDate().toLocaleDateString('pt-BR')}</td>
                                 <td className="p-4 text-texto-principal font-mono">{Number(conta.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                 <td className="p-4">
                                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${conta.status === 'Pago' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
